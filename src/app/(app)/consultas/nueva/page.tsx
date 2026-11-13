@@ -1,5 +1,7 @@
 import { guard } from "@/lib/context";
-import { Card, Field, Notice, PageHeader, Select } from "@/components/ui";
+import { Card, Notice, PageHeader } from "@/components/ui";
+import { CLINICAL_SUGGESTIONS as CS } from "@/lib/constants";
+import { ConsultaPickers } from "../header-pickers";
 import { ActionForm, SubmitButton } from "@/components/ui/client";
 import { age } from "@/lib/utils";
 import { ClinicalFields } from "../clinical-fields";
@@ -16,47 +18,38 @@ export default async function NewConsultation({ searchParams }: { searchParams: 
   const patientId = appt?.patient_id ?? sp.paciente ?? "";
 
   const [{ data: doctors }, { data: specialties }, { data: patient }, { data: patients }] = await Promise.all([
-    ctx.supabase.from("doctors").select("id, full_name, user_id").eq("clinic_id", ctx.clinic.id).eq("active", true).order("full_name"),
+    ctx.supabase.from("doctors").select("id, full_name, user_id, doctor_specialties(specialty_id)").eq("clinic_id", ctx.clinic.id).eq("active", true).order("full_name"),
     ctx.supabase.from("specialties").select("id, name").eq("clinic_id", ctx.clinic.id).eq("active", true).order("name"),
     patientId ? ctx.supabase.from("patients").select("id, first_name, last_name, document, birth_date, allergies, preexisting_conditions, current_medications").eq("id", patientId).maybeSingle() : Promise.resolve({ data: null }),
     patientId ? Promise.resolve({ data: [] }) : ctx.supabase.from("patients").select("id, first_name, last_name, document").eq("clinic_id", ctx.clinic.id).eq("archived", false).order("last_name").limit(3000),
   ]);
+  const real = (v: string | null | undefined, none: string) => (v && v.trim().toLowerCase() !== none.toLowerCase() ? v : null);
+  const alert = patient ? { a: real(patient.allergies, CS.allergies.none), p: real(patient.preexisting_conditions, CS.preexisting_conditions.none), m: real(patient.current_medications, CS.current_medications.none) } : null;
   const myDoctor = doctors?.find((d) => d.user_id === ctx.user.id);
   const doctorList = ctx.ownOnly ? (doctors ?? []).filter((d) => ctx.myDoctorIds.includes(d.id)) : doctors;
 
   return (
     <>
       <PageHeader title="Nueva consulta" description={patient ? `${patient.first_name} ${patient.last_name} · CI ${patient.document}${patient.birth_date ? ` · ${age(patient.birth_date)} años` : ""}` : "Registro en la historia clínica"} back={{ href: "/consultas", label: "Consultas" }} />
-      {patient && (patient.allergies || patient.preexisting_conditions || patient.current_medications) && (
+      {alert && (alert.a || alert.p || alert.m) && (
         <div className="mb-4"><Notice tone="amber">
-          {patient.allergies && <><b>Alergias:</b> {patient.allergies}. </>}
-          {patient.preexisting_conditions && <><b>Preexistentes:</b> {patient.preexisting_conditions}. </>}
-          {patient.current_medications && <><b>Medicación:</b> {patient.current_medications}.</>}
+          {alert.a && <><b>Alergias:</b> {alert.a}. </>}
+          {alert.p && <><b>Preexistentes:</b> {alert.p}. </>}
+          {alert.m && <><b>Medicación:</b> {alert.m}.</>}
         </Notice></div>
       )}
       <Card>
         <ActionForm action={createConsultation}>
           <input type="hidden" name="appointment_id" value={appt?.id ?? ""} />
           <div className="mb-6 grid gap-4 md:grid-cols-3">
-            {patient ? <input type="hidden" name="patient_id" value={patient.id} /> : (
-              <Field label="Paciente" name="patient_id" required>
-                <Select name="patient_id" required defaultValue="">
-                  <option value="">Seleccioná…</option>
-                  {patients?.map((p) => <option key={p.id} value={p.id}>{p.last_name}, {p.first_name} — {p.document}</option>)}
-                </Select>
-              </Field>
-            )}
-            <Field label="Profesional responsable" name="doctor_id" required>
-              <Select name="doctor_id" required defaultValue={appt?.doctor_id ?? myDoctor?.id ?? ""}>
-                <option value="">Seleccioná…</option>
-                {doctorList?.map((d) => <option key={d.id} value={d.id}>{d.full_name}</option>)}
-              </Select>
-            </Field>
-            <Field label="Especialidad" name="specialty_id">
-              <Select name="specialty_id" defaultValue={appt?.specialty_id ?? ""}>
-                <option value="">—</option>{specialties?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </Select>
-            </Field>
+            {patient && <input type="hidden" name="patient_id" value={patient.id} />}
+            <ConsultaPickers
+              patients={patient ? null : (patients ?? []).map((p) => ({ value: p.id, label: `${p.last_name}, ${p.first_name}`, hint: `CI ${p.document}` }))}
+              doctors={(doctorList ?? []).map((d) => ({ id: d.id, full_name: d.full_name, specialties: ((d.doctor_specialties ?? []) as { specialty_id: string }[]).map((x) => x.specialty_id) }))}
+              specialties={specialties ?? []}
+              defaultDoctor={appt?.doctor_id ?? myDoctor?.id ?? ""}
+              defaultSpecialty={appt?.specialty_id ?? ""}
+            />
           </div>
           <ClinicalFields c={{ reason: appt?.reason ?? "" }} />
           <div className="mt-6 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">

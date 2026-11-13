@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { realAllergies } from "@/lib/constants";
 import { notFound } from "next/navigation";
 import { FlaskConical, Lock, Pill, Receipt } from "lucide-react";
 import { guard, can } from "@/lib/context";
@@ -49,7 +50,7 @@ export default async function ConsultationPage({ params }: { params: Promise<{ i
           </>
         }
       />
-      {p.allergies && <div className="mb-4"><Notice tone="red"><b>Alergias:</b> {p.allergies}</Notice></div>}
+      {realAllergies(p.allergies) && <div className="mb-4"><Notice tone="red"><b>Alergias:</b> {p.allergies}</Notice></div>}
       {!mine && <div className="mb-4"><Notice tone="blue">Consulta realizada por <b>{d.full_name}</b>. Podés verla como parte de la historia clínica compartida, pero solo quien la atendió puede modificarla.</Notice></div>}
 
       {!closed && canEdit ? (
@@ -64,7 +65,7 @@ export default async function ConsultationPage({ params }: { params: Promise<{ i
           </ActionForm>
         </Card>
       ) : null}
-      {!closed && canEdit && <div className="mt-6"><div id="receta" className="scroll-mt-24"><PrescriptionPanel ctx={ctx} patientId={p.id} doctorId={c.doctor_id} consultationId={id} diagnosis={c.diagnosis} allergies={p.allergies} readOnly={!mine} /></div></div>}
+      {!closed && canEdit && <div className="mt-6"><div id="receta" className="scroll-mt-24"><PrescriptionPanel ctx={ctx} patientId={p.id} doctorId={c.doctor_id} consultationId={id} diagnosis={c.diagnosis} allergies={realAllergies(p.allergies)} readOnly={!mine} /></div></div>}
       {!closed && canEdit && <div className="mt-6"><div id="estudios" className="scroll-mt-24"><LabPanel ctx={ctx} patientId={p.id} doctorId={c.doctor_id} consultationId={id} readOnly={!mine} /></div></div>}
       {!closed && canEdit ? null : (
         <div className="grid gap-6 xl:grid-cols-3">
@@ -83,7 +84,7 @@ export default async function ConsultationPage({ params }: { params: Promise<{ i
             <Card title="Diagnóstico y plan">
               <DL cols={2} items={[["Diagnóstico", c.diagnosis ? `${c.diagnosis}${c.diagnosis_code ? ` (${c.diagnosis_code})` : ""}` : null], ["Tratamiento", c.treatment], ["Indicaciones", c.instructions], ["Evolución médica", c.evolution]]} />
             </Card>
-            <div id="receta" className="scroll-mt-24"><PrescriptionPanel ctx={ctx} patientId={p.id} doctorId={c.doctor_id} consultationId={id} diagnosis={c.diagnosis} allergies={p.allergies} readOnly={!mine} /></div>
+            <div id="receta" className="scroll-mt-24"><PrescriptionPanel ctx={ctx} patientId={p.id} doctorId={c.doctor_id} consultationId={id} diagnosis={c.diagnosis} allergies={realAllergies(p.allergies)} readOnly={!mine} /></div>
             <div id="estudios" className="scroll-mt-24"><LabPanel ctx={ctx} patientId={p.id} doctorId={c.doctor_id} consultationId={id} readOnly={!mine} /></div>
           </div>
           <div className="space-y-6">

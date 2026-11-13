@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { realAllergies } from "@/lib/constants";
 import { Search } from "lucide-react";
 import { guard } from "@/lib/context";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
@@ -39,7 +40,7 @@ export default async function ClinicalRecords({ searchParams }: { searchParams: 
               {rows.map((p) => (
                 <tr key={p.id}>
                   <td><Link className="font-medium hover:text-primary-700" href={`/pacientes/${p.id}?tab=historia`}>{p.last_name}, {p.first_name}</Link>
-                    {p.allergies && <span className="ml-2 rounded bg-red-50 px-1.5 text-[11px] text-red-700">Alergias</span>}
+                    {realAllergies(p.allergies) && <span className="ml-2 rounded bg-red-50 px-1.5 text-[11px] text-red-700">Alergias</span>}
                     {p.open > 0 && <span className="ml-2 rounded bg-amber-50 px-1.5 text-[11px] text-amber-700">{p.open} abierta(s)</span>}</td>
                   <td>{p.document}</td><td>{age(p.birth_date) ?? "—"}</td><td>{p.total}</td>
                   <td>{p.last ? fmtDate(p.last.consulted_at, ctx.tz) : "—"}</td>

@@ -1,5 +1,6 @@
 import { Field, Input, Select, Textarea } from "@/components/ui";
-import { BLOOD_TYPES } from "@/lib/constants";
+import { BLOOD_TYPES, CLINICAL_SUGGESTIONS as CS } from "@/lib/constants";
+import { TagInput } from "@/components/ui/pickers";
 
 type P = Record<string, string | null | boolean> | null;
 
@@ -36,10 +37,10 @@ export function PatientFields({ p, isNew }: { p?: P; isNew?: boolean }) {
       <fieldset>
         <legend className="mb-3 text-sm font-semibold text-slate-800">Datos clínicos</legend>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Alergias" name="allergies"><Textarea name="allergies" defaultValue={v("allergies")} rows={2} /></Field>
-          <Field label="Enfermedades preexistentes" name="preexisting_conditions"><Textarea name="preexisting_conditions" defaultValue={v("preexisting_conditions")} rows={2} /></Field>
-          <Field label="Antecedentes médicos" name="medical_history"><Textarea name="medical_history" defaultValue={v("medical_history")} rows={2} /></Field>
-          <Field label="Medicamentos actuales" name="current_medications"><Textarea name="current_medications" defaultValue={v("current_medications")} rows={2} /></Field>
+          <Field label="Alergias" name="allergies"><TagInput name="allergies" defaultValue={v("allergies")} suggestions={[...CS.allergies.items]} none={CS.allergies.none} placeholder="Ej.: Penicilina, látex…" /></Field>
+          <Field label="Enfermedades preexistentes" name="preexisting_conditions"><TagInput name="preexisting_conditions" defaultValue={v("preexisting_conditions")} suggestions={[...CS.preexisting_conditions.items]} none={CS.preexisting_conditions.none} placeholder="Ej.: Hipertensión, diabetes…" /></Field>
+          <Field label="Antecedentes médicos" name="medical_history"><TagInput name="medical_history" defaultValue={v("medical_history")} suggestions={[...CS.medical_history.items]} none={CS.medical_history.none} placeholder="Ej.: Cirugías previas, tabaquismo…" /></Field>
+          <Field label="Medicamentos actuales" name="current_medications"><TagInput name="current_medications" defaultValue={v("current_medications")} suggestions={[...CS.current_medications.items]} none={CS.current_medications.none} placeholder="Ej.: Losartán 50 mg…" /></Field>
         </div>
       </fieldset>
       {isNew && (

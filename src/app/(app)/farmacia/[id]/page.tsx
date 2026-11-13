@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { realAllergies } from "@/lib/constants";
 import { notFound } from "next/navigation";
 import { guard, can } from "@/lib/context";
 import { Badge, Card, Notice, PageHeader } from "@/components/ui";
@@ -36,7 +37,7 @@ export default async function DispensePage({ params }: { params: Promise<{ id: s
         description={`${p.first_name} ${p.last_name} · CI ${p.document} · ${d.full_name} (Mat. ${d.license_number}) · ${fmtDateTime(r.issued_at, ctx.tz)}`}
         actions={can(ctx.perms, "recetas") && <Link href={`/recetas/${r.id}`} className="text-sm font-medium text-primary-700 hover:underline">Ver receta</Link>} />
       {r.status !== "emitida" && <div className="mb-4"><Notice tone="red">Esta receta está anulada y no puede entregarse.</Notice></div>}
-      {p.allergies && <div className="mb-4"><Notice tone="red"><b>Alergias del paciente:</b> {p.allergies}</Notice></div>}
+      {realAllergies(p.allergies) && <div className="mb-4"><Notice tone="red"><b>Alergias del paciente:</b> {p.allergies}</Notice></div>}
 
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">

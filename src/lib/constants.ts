@@ -134,3 +134,29 @@ export const TABLE_LABELS: Record<string, string> = {
 };
 
 export const ACTION_LABELS: Record<string, string> = { insert: "creó", update: "modificó", delete: "eliminó" };
+
+// Sugerencias para los datos clínicos del paciente (se puede escribir cualquier otro valor).
+export const CLINICAL_SUGGESTIONS = {
+  allergies: {
+    none: "Ninguna conocida",
+    items: ["Ninguna conocida", "Penicilina", "Amoxicilina", "Cefalosporinas", "Sulfas", "Aspirina", "Ibuprofeno", "Diclofenac", "Dipirona", "Paracetamol", "Codeína / opioides", "Anestésicos locales", "Yodo / medio de contraste", "Látex", "Níquel", "Mariscos", "Pescado", "Maní", "Frutos secos", "Huevo", "Leche de vaca", "Gluten", "Soja", "Picadura de abeja / avispa", "Polen", "Ácaros del polvo", "Pelo de gato", "Pelo de perro", "Moho"],
+  },
+  preexisting_conditions: {
+    none: "Ninguna",
+    items: ["Ninguna", "Hipertensión arterial", "Diabetes tipo 1", "Diabetes tipo 2", "Prediabetes", "Dislipidemia", "Obesidad", "Hipotiroidismo", "Hipertiroidismo", "Asma", "EPOC", "Rinitis alérgica", "Insuficiencia cardíaca", "Cardiopatía isquémica", "Arritmia / fibrilación auricular", "Enfermedad renal crónica", "Hígado graso", "Gastritis / reflujo", "Epilepsia", "Migraña", "Artritis reumatoidea", "Artrosis", "Lupus", "Osteoporosis", "Anemia", "Depresión", "Trastorno de ansiedad", "VIH", "Hepatitis B", "Hepatitis C", "Cáncer (en tratamiento)", "Cáncer (en remisión)", "Embarazo en curso"],
+  },
+  medical_history: {
+    none: "Sin antecedentes relevantes",
+    items: ["Sin antecedentes relevantes", "Cirugías previas", "Apendicectomía", "Colecistectomía", "Cesárea", "Hernioplastia", "Histerectomía", "Hospitalización previa", "Fracturas", "ACV previo", "Infarto previo", "Transfusiones", "Dengue", "Chikungunya", "COVID-19", "Tuberculosis", "Tabaquismo", "Ex tabaquista", "Consumo de alcohol", "Sedentarismo", "Antecedente familiar de diabetes", "Antecedente familiar de hipertensión", "Antecedente familiar de cáncer", "Antecedente familiar de cardiopatía", "Vacunación completa"],
+  },
+  current_medications: {
+    none: "Ninguno",
+    items: ["Ninguno", "Losartán", "Enalapril", "Amlodipina", "Hidroclorotiazida", "Atenolol", "Bisoprolol", "Metformina", "Glibenclamida", "Insulina", "Levotiroxina", "Atorvastatina", "Rosuvastatina", "Aspirina 100 mg", "Clopidogrel", "Warfarina", "Omeprazol", "Pantoprazol", "Salbutamol (inhalador)", "Budesonida (inhalador)", "Loratadina", "Anticonceptivos orales", "Sertralina", "Fluoxetina", "Clonazepam", "Alprazolam", "Levetiracetam", "Ácido fólico", "Hierro", "Vitamina D", "Calcio"],
+  },
+} as const;
+
+/** Devuelve las alergias solo si hay alguna real (no "Ninguna conocida"). */
+export function realAllergies(s: string | null | undefined): string | null {
+  const v = (s ?? "").trim();
+  return v && v.toLowerCase() !== CLINICAL_SUGGESTIONS.allergies.none.toLowerCase() ? v : null;
+}

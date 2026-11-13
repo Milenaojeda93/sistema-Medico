@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { realAllergies } from "@/lib/constants";
 import { notFound } from "next/navigation";
 import { Pencil, Plus, Archive, ArchiveRestore, FileText, AlertTriangle, CalendarPlus, Receipt } from "lucide-react";
 import { guard, can } from "@/lib/context";
@@ -49,7 +50,7 @@ export default async function PatientProfile({ params, searchParams }: { params:
           </>
         }
       />
-      {p.allergies && (
+      {realAllergies(p.allergies) && (
         <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-800 ring-1 ring-red-100">
           <AlertTriangle className="h-4 w-4" /> <b>Alergias:</b> {p.allergies}
         </div>
