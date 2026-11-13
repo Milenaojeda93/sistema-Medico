@@ -76,7 +76,7 @@ export default async function Users({ searchParams }: { searchParams: Promise<{ 
                   const p = perms?.find((x) => x.module === m.key);
                   return (
                     <tr key={m.key}>
-                      <td className="font-medium">{m.label}{"phase2" in m && m.phase2 && <span className="ml-2 text-xs text-slate-400">Fase 2</span>}</td>
+                      <td className="font-medium">{m.label}</td>
                       {(["view", "create", "edit", "delete"] as const).map((a) => (
                         <td key={a} className="text-center"><input type="checkbox" name={`${m.key}:${a}`} defaultChecked={Boolean(p?.[`can_${a}`])} disabled={!editable} className="h-4 w-4 rounded border-slate-300" /></td>
                       ))}

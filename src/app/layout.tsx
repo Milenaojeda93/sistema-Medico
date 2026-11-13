@@ -11,8 +11,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={`${GeistSans.variable} ${GeistMono.variable}`}>
-      <body>{children}</body>
+    <html lang="es" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
+      <body>
+        <script dangerouslySetInnerHTML={{ __html: `try{if(localStorage.getItem("medvia.sidebar")==="compact")document.documentElement.dataset.sidebar="compact"}catch(e){}` }} />
+        {children}
+      </body>
     </html>
   );
 }

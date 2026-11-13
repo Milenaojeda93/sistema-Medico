@@ -57,6 +57,11 @@
 
 .tabular { font-variant-numeric: tabular-nums; }
 
+@media (min-width: 1024px) {
+  .app-shell { padding-left: 264px; }
+  html[data-sidebar="compact"] .app-shell { padding-left: 76px; }
+}
+
 details > summary::-webkit-details-marker { display: none; }
 
 dialog { @apply rounded-2xl shadow-pop; }

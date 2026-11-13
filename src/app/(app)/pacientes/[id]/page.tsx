@@ -8,6 +8,7 @@ import { ACTION_LABELS, APPOINTMENT_STATUS, AUTH_STATUS, INSURANCE_STATUS, INVOI
 import { age, fmtDate, fmtDateTime, gs } from "@/lib/utils";
 import { InsuranceFields } from "../forms";
 import { saveInsurance, toggleArchive, uploadDocument } from "../actions";
+import { LAB_SELECT, LabOrderCard, signedUrls, type LabOrderRow } from "../../laboratorio/order-card";
 
 export default async function PatientProfile({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
   const { id } = await params;
@@ -26,7 +27,7 @@ export default async function PatientProfile({ params, searchParams }: { params:
     { key: "consultas", label: "Consultas y citas", hidden: !can(perms, "agenda") },
     { key: "diagnosticos", label: "Diagnósticos", hidden: !canClinical },
     { key: "recetas", label: "Recetas", hidden: !can(perms, "recetas") },
-    { key: "estudios", label: "Estudios", disabled: true, badge: "Fase 2" },
+    { key: "estudios", label: "Estudios", hidden: !can(perms, "laboratorio") },
     { key: "documentos", label: "Documentos" },
     { key: "pagos", label: "Pagos", hidden: !canBilling },
     { key: "actividad", label: "Historial de actividad", hidden: !can(perms, "auditoria") },
@@ -84,6 +85,7 @@ export default async function PatientProfile({ params, searchParams }: { params:
       {tab === "consultas" && <AppointmentsTab patientId={id} ctx={ctx} />}
       {tab === "diagnosticos" && canClinical && <DiagnosesTab patientId={id} ctx={ctx} />}
       {tab === "recetas" && can(perms, "recetas") && <PrescriptionsTab patientId={id} ctx={ctx} />}
+      {tab === "estudios" && can(perms, "laboratorio") && <StudiesTab patientId={id} ctx={ctx} />}
       {tab === "documentos" && <DocumentsTab patientId={id} ctx={ctx} />}
       {tab === "pagos" && canBilling && <PaymentsTab patientId={id} ctx={ctx} />}
       {tab === "actividad" && <ActivityTab patientId={id} ctx={ctx} />}
@@ -253,6 +255,19 @@ async function PrescriptionsTab({ patientId, ctx }: { patientId: string; ctx: C 
             </li>
           ))}
         </ul>
+      )}
+    </Card>
+  );
+}
+
+async function StudiesTab({ patientId, ctx }: { patientId: string; ctx: C }) {
+  const { data } = await ctx.supabase.from("lab_orders").select(LAB_SELECT).eq("clinic_id", ctx.clinic.id).eq("patient_id", patientId).order("ordered_at", { ascending: false });
+  const orders = (data ?? []) as unknown as LabOrderRow[];
+  const urls = await signedUrls(ctx, orders);
+  return (
+    <Card title="Estudios y resultados">
+      {!orders.length ? <EmptyState title="Sin estudios" description="Los estudios se piden desde la consulta del paciente." /> : (
+        <div className="space-y-3">{orders.map((o) => <LabOrderCard key={o.id} o={o} tz={ctx.tz} urls={urls} showDoctor />)}</div>
       )}
     </Card>
   );

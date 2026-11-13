@@ -11,7 +11,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-screen">
       <Sidebar allowed={allowed} isSuper={ctx.isSuper} clinicName={ctx.clinic.name} />
-      <div className="lg:pl-[264px] print:pl-0">
+      <div className="app-shell transition-[padding] duration-200 print:pl-0">
         <Topbar ctx={ctx} />
         <main className="mx-auto max-w-[1440px] px-4 py-7 lg:px-10 lg:py-9">{children}</main>
       </div>

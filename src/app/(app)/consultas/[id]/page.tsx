@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Lock, Pill, Receipt } from "lucide-react";
+import { FlaskConical, Lock, Pill, Receipt } from "lucide-react";
 import { guard, can } from "@/lib/context";
 import { Badge, Card, DL, Field, Input, LinkButton, Notice, PageHeader, Select, Textarea } from "@/components/ui";
 import { ActionForm, Modal, SubmitButton } from "@/components/ui/client";
@@ -8,6 +8,7 @@ import { age, fmtDateTime } from "@/lib/utils";
 import { ClinicalFields } from "../clinical-fields";
 import { amendConsultation, updateConsultation } from "../actions";
 import { PrescriptionPanel } from "../../recetas/panel";
+import { LabPanel } from "../../laboratorio/panel";
 
 const FIELDS: Record<string, string> = {
   reason: "Motivo de consulta", symptoms: "Síntomas", background: "Antecedentes", diagnosis: "Diagnóstico", diagnosis_code: "Código CIE-10",
@@ -41,6 +42,7 @@ export default async function ConsultationPage({ params }: { params: Promise<{ i
         actions={
           <>
             {can(ctx.perms, "recetas") && <a href="#receta" className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-white px-3.5 text-sm font-medium text-slate-700 shadow-soft ring-1 ring-inset ring-slate-200 hover:bg-slate-50"><Pill className="h-4 w-4" /> Receta</a>}
+            {can(ctx.perms, "laboratorio") && <a href="#estudios" className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-white px-3.5 text-sm font-medium text-slate-700 shadow-soft ring-1 ring-inset ring-slate-200 hover:bg-slate-50"><FlaskConical className="h-4 w-4" /> Estudios</a>}
             {invoice ? <LinkButton variant="secondary" href={`/facturacion/${invoice.id}`}><Receipt className="h-4 w-4" /> Factura {invoice.number}</LinkButton>
               : can(ctx.perms, "facturacion", "create") && <LinkButton variant="secondary" href={`/facturacion/nueva?paciente=${p.id}&consulta=${id}`}><Receipt className="h-4 w-4" /> Facturar</LinkButton>}
           </>
@@ -61,6 +63,7 @@ export default async function ConsultationPage({ params }: { params: Promise<{ i
         </Card>
       ) : null}
       {!closed && canEdit && <div className="mt-6"><div id="receta" className="scroll-mt-24"><PrescriptionPanel ctx={ctx} patientId={p.id} doctorId={c.doctor_id} consultationId={id} diagnosis={c.diagnosis} allergies={p.allergies} /></div></div>}
+      {!closed && canEdit && <div className="mt-6"><div id="estudios" className="scroll-mt-24"><LabPanel ctx={ctx} patientId={p.id} doctorId={c.doctor_id} consultationId={id} /></div></div>}
       {!closed && canEdit ? null : (
         <div className="grid gap-6 xl:grid-cols-3">
           <div className="space-y-6 xl:col-span-2">
@@ -79,6 +82,7 @@ export default async function ConsultationPage({ params }: { params: Promise<{ i
               <DL cols={2} items={[["Diagnóstico", c.diagnosis ? `${c.diagnosis}${c.diagnosis_code ? ` (${c.diagnosis_code})` : ""}` : null], ["Tratamiento", c.treatment], ["Indicaciones", c.instructions], ["Evolución médica", c.evolution]]} />
             </Card>
             <div id="receta" className="scroll-mt-24"><PrescriptionPanel ctx={ctx} patientId={p.id} doctorId={c.doctor_id} consultationId={id} diagnosis={c.diagnosis} allergies={p.allergies} /></div>
+            <div id="estudios" className="scroll-mt-24"><LabPanel ctx={ctx} patientId={p.id} doctorId={c.doctor_id} consultationId={id} /></div>
           </div>
           <div className="space-y-6">
             <Card title="Trazabilidad">
