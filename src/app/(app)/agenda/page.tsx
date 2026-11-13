@@ -1,5 +1,5 @@
 import { guard, can } from "@/lib/context";
-import { PageHeader } from "@/components/ui";
+import { Notice, PageHeader } from "@/components/ui";
 import { addDays, todayISO, zonedToUtc } from "@/lib/utils";
 import { Calendar } from "./calendar";
 
@@ -33,6 +33,7 @@ export default async function Agenda({ searchParams }: { searchParams: Promise<{
     .lt("starts_at", zonedToUtc(`${to}T00:00`, ctx.tz).toISOString())
     .order("starts_at");
   if (sp.medico) q = q.eq("doctor_id", sp.medico);
+  const docFilter = ctx.ownOnly ? (sp.medico && ctx.myDoctorIds.includes(sp.medico) ? sp.medico : ctx.myDoctorIds.length === 1 ? ctx.myDoctorIds[0] : "") : sp.medico ?? "";
 
   const [{ data: appts }, { data: doctors }, { data: rooms }, { data: specialties }, { data: patients }, { data: insurances }, { data: schedules }] = await Promise.all([
     q,
@@ -46,16 +47,17 @@ export default async function Agenda({ searchParams }: { searchParams: Promise<{
 
   return (
     <>
-      <PageHeader title="Agenda médica" description="Citas por profesional, sin superposición de horarios ni consultorios" />
+      <PageHeader title={ctx.ownOnly ? "Mi agenda" : "Agenda médica"} description={ctx.ownOnly ? "Tus citas y horarios de atención" : "Citas por profesional, sin superposición de horarios ni consultorios"} />
+      {ctx.ownOnly && !ctx.myDoctorIds.length && <div className="mb-4"><Notice tone="amber">Tu usuario todavía no está vinculado a una ficha de profesional. Pedile al administrador que lo vincule en <b>Médicos y profesionales</b> para ver tu agenda.</Notice></div>}
       <Calendar
         view={view}
         date={date}
         from={from}
         today={todayISO(ctx.tz)}
         tz={ctx.tz}
-        doctorFilter={sp.medico ?? ""}
+        doctorFilter={docFilter}
         appointments={(appts ?? []) as never}
-        doctors={(doctors ?? []).map((d) => ({ id: d.id, full_name: d.full_name, room_id: d.room_id, specialties: (d.doctor_specialties as { specialty_id: string }[]).map((x) => x.specialty_id) }))}
+        doctors={(doctors ?? []).filter((d) => !ctx.ownOnly || ctx.myDoctorIds.includes(d.id)).map((d) => ({ id: d.id, full_name: d.full_name, room_id: d.room_id, specialties: (d.doctor_specialties as { specialty_id: string }[]).map((x) => x.specialty_id) }))}
         rooms={rooms ?? []}
         specialties={specialties ?? []}
         patients={(patients ?? []).map((p) => ({ id: p.id, name: `${p.last_name}, ${p.first_name}`, document: p.document }))}

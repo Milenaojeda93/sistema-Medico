@@ -57,6 +57,11 @@ export default async function Settings({ searchParams }: { searchParams: Promise
                 <Field label="Ciudad" name="city"><Input name="city" defaultValue={clinic.city ?? ""} /></Field>
                 <Field label="Dirección" name="address"><Input name="address" defaultValue={clinic.address ?? ""} /></Field>
                 <Field label="País" name="country"><Input name="country" defaultValue={clinic.country ?? ""} /></Field>
+                <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-4 text-sm sm:col-span-2">
+                  <input type="checkbox" name="doctors_see_own_only" defaultChecked={clinic.doctors_see_own_only !== false} className="mt-0.5 h-4 w-4 rounded border-slate-300" />
+                  <span><b className="text-slate-900">Cada médico ve solo sus propios pacientes</b><br />
+                    <span className="text-slate-500">Al ingresar con su usuario, el médico ve únicamente su agenda, sus consultas, sus recetas y estudios, y los pacientes que atendió o tiene agendados. Administración, recepción y el resto del personal siguen viendo todo.</span></span>
+                </label>
               </fieldset>
               {editable && <div className="mt-5 flex justify-end"><SubmitButton>Guardar</SubmitButton></div>}
             </ActionForm>

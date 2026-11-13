@@ -11,6 +11,7 @@ export async function updateClinic(_: ActionState, fd: FormData): Promise<Action
   const { error } = await ctx.supabase.from("clinics").update({
     name, legal_name: str(fd, "legal_name"), ruc: str(fd, "ruc"), address: str(fd, "address"), city: str(fd, "city"),
     country: str(fd, "country"), phone: str(fd, "phone"), email: str(fd, "email"),
+    doctors_see_own_only: fd.get("doctors_see_own_only") === "on",
   }).eq("id", ctx.clinic.id);
   return error ? { error: dbError(error.message) } : { ok: true, message: "Datos de la institución guardados" };
 }

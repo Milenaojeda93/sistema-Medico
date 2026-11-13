@@ -22,6 +22,7 @@ export default async function NewConsultation({ searchParams }: { searchParams: 
     patientId ? Promise.resolve({ data: [] }) : ctx.supabase.from("patients").select("id, first_name, last_name, document").eq("clinic_id", ctx.clinic.id).eq("archived", false).order("last_name").limit(3000),
   ]);
   const myDoctor = doctors?.find((d) => d.user_id === ctx.user.id);
+  const doctorList = ctx.ownOnly ? (doctors ?? []).filter((d) => ctx.myDoctorIds.includes(d.id)) : doctors;
 
   return (
     <>
@@ -48,7 +49,7 @@ export default async function NewConsultation({ searchParams }: { searchParams: 
             <Field label="Profesional responsable" name="doctor_id" required>
               <Select name="doctor_id" required defaultValue={appt?.doctor_id ?? myDoctor?.id ?? ""}>
                 <option value="">Seleccioná…</option>
-                {doctors?.map((d) => <option key={d.id} value={d.id}>{d.full_name}</option>)}
+                {doctorList?.map((d) => <option key={d.id} value={d.id}>{d.full_name}</option>)}
               </Select>
             </Field>
             <Field label="Especialidad" name="specialty_id">

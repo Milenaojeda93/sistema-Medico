@@ -7,7 +7,7 @@ import type { Action, ModuleKey } from "@/lib/constants";
 
 export type Perms = Record<string, { view: boolean; create: boolean; edit: boolean; delete: boolean }>;
 
-export type Clinic = { id: string; name: string; status: string; timezone: string; ruc: string | null; address: string | null; phone: string | null; email: string | null; city: string | null };
+export type Clinic = { id: string; name: string; status: string; timezone: string; ruc: string | null; address: string | null; phone: string | null; email: string | null; city: string | null; doctors_see_own_only?: boolean };
 
 export const getSession = cache(async () => {
   const supabase = await createClient();
@@ -16,7 +16,7 @@ export const getSession = cache(async () => {
 
   const [{ data: profile }, { data: members }, { data: isSuper }] = await Promise.all([
     supabase.from("profiles").select("full_name, email").eq("id", user.id).maybeSingle(),
-    supabase.from("clinic_members").select("clinic_id, role, clinics(id, name, status, timezone, ruc, address, phone, email, city)").eq("user_id", user.id).eq("active", true),
+    supabase.from("clinic_members").select("clinic_id, role, clinics(id, name, status, timezone, ruc, address, phone, email, city, doctors_see_own_only)").eq("user_id", user.id).eq("active", true),
     supabase.rpc("is_platform_admin"),
   ]);
 
@@ -47,7 +47,12 @@ export const getCtx = cache(async () => {
   const perms: Perms = {};
   for (const r of rp ?? []) perms[r.module] = { view: r.can_view, create: r.can_create, edit: r.can_edit, delete: r.can_delete };
 
-  return { ...s, clinic, role: current.role, perms, tz: clinic.timezone || "America/Asuncion" };
+  // Médico que solo ve lo propio (configurable por clínica)
+  const ownOnly = current.role === "medico" && clinic.doctors_see_own_only !== false;
+  const { data: mine } = await s.supabase.from("doctors").select("id").eq("clinic_id", clinic.id).eq("user_id", s.user.id);
+  const myDoctorIds = (mine ?? []).map((d) => d.id as string);
+
+  return { ...s, clinic, role: current.role, perms, ownOnly, myDoctorIds, tz: clinic.timezone || "America/Asuncion" };
 });
 
 export type Ctx = Awaited<ReturnType<typeof getCtx>>;

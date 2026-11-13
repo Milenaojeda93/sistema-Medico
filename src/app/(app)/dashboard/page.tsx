@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Users, UserPlus, Stethoscope, Clock, CheckCircle2, UserRound, Activity, Banknote, CalendarRange, FileWarning, Building2 } from "lucide-react";
 import { guard } from "@/lib/context";
-import { Badge, Card, PageHeader, Stat, StatusBadge } from "@/components/ui";
+import { Badge, Card, Notice, PageHeader, Stat, StatusBadge } from "@/components/ui";
 import { ACTION_LABELS, APPOINTMENT_STATUS, TABLE_LABELS } from "@/lib/constants";
 import { fmtDateTime, fmtTime, gs } from "@/lib/utils";
 import { BySpecialty, CareType, ConsultationsByDay, IncomeByMonth, NewPatients } from "./charts";
@@ -28,30 +28,37 @@ export default async function Dashboard() {
   if (error) throw new Error(error.message);
   const s = data as Stats;
   const first = (ctx.profile?.full_name ?? "").split(" ")[0];
+  const own = ctx.ownOnly;
 
   return (
     <>
-      <PageHeader title={`Hola${first ? ", " + first : ""}`} description={`Resumen de ${ctx.clinic.name}`} />
+      <PageHeader title={`Hola${first ? ", " + first : ""}`} description={own ? "Tu resumen: tus pacientes, tu agenda y tus consultas" : `Resumen de ${ctx.clinic.name}`} />
+      {own && !ctx.myDoctorIds.length && <div className="mb-4"><Notice tone="amber">Tu usuario todavía no está vinculado a una ficha de profesional. Pedile al administrador que lo vincule en <b>Médicos y profesionales</b>.</Notice></div>}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat label="Total de pacientes" value={s.total_patients.toLocaleString("es-PY")} hint={`${s.new_patients_month} nuevos este mes`} icon={<Users className="h-5 w-5" />} />
+        <Stat label={own ? "Mis pacientes" : "Total de pacientes"} value={s.total_patients.toLocaleString("es-PY")} hint={`${s.new_patients_month} nuevos este mes`} icon={<Users className="h-5 w-5" />} />
         <Stat label="Consultas del día" value={s.consultations_today} hint={`${s.appointments_today} citas agendadas hoy`} icon={<Stethoscope className="h-5 w-5" />} tone="sky" />
-        <Stat label="Ingresos del día" value={gs(s.income_today)} hint={`Mes: ${gs(s.income_month)}`} icon={<Banknote className="h-5 w-5" />} tone="green" />
-        <Stat label="Cuentas por cobrar a aseguradoras" value={gs(s.insurer_receivable)} hint="Facturado − pagado − rechazado" icon={<Building2 className="h-5 w-5" />} tone="violet" />
+        {own ? <>
+          <Stat label="Citas pendientes" value={s.pending_appointments} hint="Por confirmar" icon={<Clock className="h-5 w-5" />} tone="amber" />
+          <Stat label="Consultas del mes" value={s.consultations_month} icon={<Activity className="h-5 w-5" />} tone="violet" />
+        </> : <>
+          <Stat label="Ingresos del día" value={gs(s.income_today)} hint={`Mes: ${gs(s.income_month)}`} icon={<Banknote className="h-5 w-5" />} tone="green" />
+          <Stat label="Cuentas por cobrar a aseguradoras" value={gs(s.insurer_receivable)} hint="Facturado − pagado − rechazado" icon={<Building2 className="h-5 w-5" />} tone="violet" />
+        </>}
       </div>
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+      {!own && <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         <Stat label="Pacientes nuevos (mes)" value={s.new_patients_month} icon={<UserPlus className="h-5 w-5" />} />
         <Stat label="Citas pendientes" value={s.pending_appointments} icon={<Clock className="h-5 w-5" />} tone="amber" />
         <Stat label="Citas confirmadas" value={s.confirmed_appointments} icon={<CheckCircle2 className="h-5 w-5" />} tone="green" />
         <Stat label="Médicos disponibles hoy" value={`${s.available_doctors} / ${s.active_doctors}`} icon={<UserRound className="h-5 w-5" />} tone="sky" />
         <Stat label="Consultas realizadas (mes)" value={s.consultations_month} icon={<Activity className="h-5 w-5" />} />
         <Stat label="Facturas pendientes" value={s.pending_invoices} hint={gs(s.pending_invoices_amount)} icon={<FileWarning className="h-5 w-5" />} tone="red" />
-      </div>
+      </div>}
 
       <div className="mt-6 grid gap-6 xl:grid-cols-3">
         <Card title="Consultas por día · últimos 30 días" className="xl:col-span-2"><ConsultationsByDay data={s.consultations_by_day} /></Card>
         <Card title="Consultas por especialidad · 90 días"><BySpecialty data={s.consultations_by_specialty} /></Card>
-        <Card title="Ingresos mensuales" className="xl:col-span-2"><IncomeByMonth data={s.income_by_month} /></Card>
+        {!own && <Card title="Ingresos mensuales" className="xl:col-span-2"><IncomeByMonth data={s.income_by_month} /></Card>}
         <Card title="Atención particular vs. por seguro · 90 días"><CareType data={s.care_type_distribution} /></Card>
         <Card title="Pacientes nuevos por mes"><NewPatients data={s.new_patients_by_month} /></Card>
 
