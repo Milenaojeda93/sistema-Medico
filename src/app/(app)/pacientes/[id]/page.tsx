@@ -25,7 +25,7 @@ export default async function PatientProfile({ params, searchParams }: { params:
     { key: "historia", label: "Historia clínica", hidden: !canClinical },
     { key: "consultas", label: "Consultas y citas", hidden: !can(perms, "agenda") },
     { key: "diagnosticos", label: "Diagnósticos", hidden: !canClinical },
-    { key: "recetas", label: "Recetas", disabled: true, badge: "Fase 2" },
+    { key: "recetas", label: "Recetas", hidden: !can(perms, "recetas") },
     { key: "estudios", label: "Estudios", disabled: true, badge: "Fase 2" },
     { key: "documentos", label: "Documentos" },
     { key: "pagos", label: "Pagos", hidden: !canBilling },
@@ -83,6 +83,7 @@ export default async function PatientProfile({ params, searchParams }: { params:
       {tab === "historia" && canClinical && <ClinicalTab patientId={id} ctx={ctx} />}
       {tab === "consultas" && <AppointmentsTab patientId={id} ctx={ctx} />}
       {tab === "diagnosticos" && canClinical && <DiagnosesTab patientId={id} ctx={ctx} />}
+      {tab === "recetas" && can(perms, "recetas") && <PrescriptionsTab patientId={id} ctx={ctx} />}
       {tab === "documentos" && <DocumentsTab patientId={id} ctx={ctx} />}
       {tab === "pagos" && canBilling && <PaymentsTab patientId={id} ctx={ctx} />}
       {tab === "actividad" && <ActivityTab patientId={id} ctx={ctx} />}
@@ -222,6 +223,36 @@ async function DiagnosesTab({ patientId, ctx }: { patientId: string; ctx: C }) {
         <table className="table-base"><thead><tr><th>Fecha</th><th>Diagnóstico</th><th>Código CIE-10</th><th>Profesional</th></tr></thead>
           <tbody>{data.map((c) => <tr key={c.id}><td>{fmtDate(c.consulted_at, ctx.tz)}</td><td><Link className="hover:text-primary-700" href={`/consultas/${c.id}`}>{c.diagnosis}</Link></td><td>{c.diagnosis_code ?? "—"}</td><td>{(c.doctors as unknown as { full_name: string })?.full_name}</td></tr>)}</tbody>
         </table>
+      )}
+    </Card>
+  );
+}
+
+async function PrescriptionsTab({ patientId, ctx }: { patientId: string; ctx: C }) {
+  const { data } = await ctx.supabase.from("prescriptions").select("id, number, issued_at, status, diagnosis, doctors(full_name), prescription_items(drug, presentation, dose, frequency, duration, position)")
+    .eq("clinic_id", ctx.clinic.id).eq("patient_id", patientId).order("issued_at", { ascending: false });
+  type I = { drug: string; presentation: string | null; dose: string | null; frequency: string | null; duration: string | null; position: number };
+  return (
+    <Card title="Recetas emitidas" padded={false}>
+      {!data?.length ? <EmptyState title="Sin recetas" description="Las recetas se emiten desde la consulta del paciente." /> : (
+        <ul className="divide-y divide-slate-100">
+          {data.map((r) => (
+            <li key={r.id} className={`px-5 py-4 ${r.status === "anulada" ? "opacity-60" : ""}`}>
+              <div className="mb-1 flex flex-wrap items-center gap-2">
+                <Link href={`/recetas/${r.id}`} className="font-semibold text-slate-900 hover:text-primary-700">{r.number}</Link>
+                <span className="text-xs text-slate-500">{fmtDateTime(r.issued_at, ctx.tz)} · {(r.doctors as unknown as { full_name: string }).full_name}</span>
+                {r.status === "anulada" ? <Badge tone="red">Anulada</Badge> : <Badge tone="green">Emitida</Badge>}
+                {r.status !== "anulada" && <Link href={`/recetas/${r.id}?imprimir=1`} target="_blank" className="ml-auto text-xs font-medium text-primary-700 hover:underline">Imprimir</Link>}
+              </div>
+              {r.diagnosis && <p className="text-xs text-slate-500">Diagnóstico: {r.diagnosis}</p>}
+              <ul className="mt-1 text-sm text-slate-700">
+                {[...(r.prescription_items as I[])].sort((a, b) => a.position - b.position).map((i, n) => (
+                  <li key={n}>• <b>{i.drug}</b>{i.presentation ? ` ${i.presentation}` : ""}{[i.dose, i.frequency, i.duration].filter(Boolean).length ? ` — ${[i.dose, i.frequency, i.duration].filter(Boolean).join(", ")}` : ""}</li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
       )}
     </Card>
   );

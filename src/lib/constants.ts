@@ -11,7 +11,7 @@ export const MODULES = [
   { key: "seguros", label: "Seguros médicos", href: "/seguros", icon: "ShieldCheck", group: "Seguros" },
   { key: "aseguradoras", label: "Aseguradoras", href: "/aseguradoras", icon: "Building2", group: "Seguros" },
   { key: "autorizaciones", label: "Autorizaciones", href: "/autorizaciones", icon: "BadgeCheck", group: "Seguros" },
-  { key: "recetas", label: "Recetas médicas", href: "/recetas", icon: "Pill", group: "Clínico", phase2: true },
+  { key: "recetas", label: "Recetas médicas", href: "/recetas", icon: "Pill", group: "Clínico" },
   { key: "laboratorio", label: "Laboratorio y estudios", href: "/laboratorio", icon: "FlaskConical", group: "Clínico", phase2: true },
   { key: "farmacia", label: "Farmacia", href: "/farmacia", icon: "Cross", group: "Clínico", phase2: true },
   { key: "inventario", label: "Inventario", href: "/inventario", icon: "Boxes", group: "Clínico", phase2: true },

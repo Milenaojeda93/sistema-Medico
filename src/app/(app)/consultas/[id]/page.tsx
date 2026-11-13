@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Lock, Receipt } from "lucide-react";
+import { Lock, Pill, Receipt } from "lucide-react";
 import { guard, can } from "@/lib/context";
 import { Badge, Card, DL, Field, Input, LinkButton, Notice, PageHeader, Select, Textarea } from "@/components/ui";
 import { ActionForm, Modal, SubmitButton } from "@/components/ui/client";
 import { age, fmtDateTime } from "@/lib/utils";
 import { ClinicalFields } from "../clinical-fields";
 import { amendConsultation, updateConsultation } from "../actions";
+import { PrescriptionPanel } from "../../recetas/panel";
 
 const FIELDS: Record<string, string> = {
   reason: "Motivo de consulta", symptoms: "Síntomas", background: "Antecedentes", diagnosis: "Diagnóstico", diagnosis_code: "Código CIE-10",
@@ -39,6 +40,7 @@ export default async function ConsultationPage({ params }: { params: Promise<{ i
         description={`${fmtDateTime(c.consulted_at, ctx.tz)} · ${d.full_name} (Mat. ${d.license_number})${c.specialties ? " · " + (c.specialties as { name: string }).name : ""} · CI ${p.document}${p.birth_date ? ` · ${age(p.birth_date)} años` : ""}`}
         actions={
           <>
+            {can(ctx.perms, "recetas") && <a href="#receta" className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-white px-3.5 text-sm font-medium text-slate-700 shadow-soft ring-1 ring-inset ring-slate-200 hover:bg-slate-50"><Pill className="h-4 w-4" /> Receta</a>}
             {invoice ? <LinkButton variant="secondary" href={`/facturacion/${invoice.id}`}><Receipt className="h-4 w-4" /> Factura {invoice.number}</LinkButton>
               : can(ctx.perms, "facturacion", "create") && <LinkButton variant="secondary" href={`/facturacion/nueva?paciente=${p.id}&consulta=${id}`}><Receipt className="h-4 w-4" /> Facturar</LinkButton>}
           </>
@@ -57,7 +59,9 @@ export default async function ConsultationPage({ params }: { params: Promise<{ i
             </div>
           </ActionForm>
         </Card>
-      ) : (
+      ) : null}
+      {!closed && canEdit && <div className="mt-6"><div id="receta" className="scroll-mt-24"><PrescriptionPanel ctx={ctx} patientId={p.id} doctorId={c.doctor_id} consultationId={id} diagnosis={c.diagnosis} allergies={p.allergies} /></div></div>}
+      {!closed && canEdit ? null : (
         <div className="grid gap-6 xl:grid-cols-3">
           <div className="space-y-6 xl:col-span-2">
             <Card title="Registro clínico">
@@ -74,6 +78,7 @@ export default async function ConsultationPage({ params }: { params: Promise<{ i
             <Card title="Diagnóstico y plan">
               <DL cols={2} items={[["Diagnóstico", c.diagnosis ? `${c.diagnosis}${c.diagnosis_code ? ` (${c.diagnosis_code})` : ""}` : null], ["Tratamiento", c.treatment], ["Indicaciones", c.instructions], ["Evolución médica", c.evolution]]} />
             </Card>
+            <div id="receta" className="scroll-mt-24"><PrescriptionPanel ctx={ctx} patientId={p.id} doctorId={c.doctor_id} consultationId={id} diagnosis={c.diagnosis} allergies={p.allergies} /></div>
           </div>
           <div className="space-y-6">
             <Card title="Trazabilidad">
