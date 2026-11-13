@@ -73,30 +73,25 @@ export async function deleteSchedule(id: string, _: ActionState, __: FormData): 
   return error ? { error: dbError(error.message) } : { ok: true };
 }
 
-export async function addDoctorInsurance(doctorId: string, _: ActionState, fd: FormData): Promise<ActionState> {
-  const ctx = await getCtx();
-  const insurer = str(fd, "insurer_id");
-  if (!insurer) return { error: "Elegí la aseguradora" };
-  const pctRaw = str(fd, "coverage_percent");
-  const copayRaw = str(fd, "copay");
-  const pct = pctRaw == null ? null : Number(pctRaw);
-  if (pct != null && (isNaN(pct) || pct < 0 || pct > 100)) return { error: "El porcentaje debe estar entre 0 y 100" };
-  const copay = copayRaw == null ? null : Number(copayRaw.replace(/[^\d]/g, ""));
-  if (pct == null && copay != null) return { error: "Para cargar un copago propio indicá también el porcentaje de cobertura" };
-  const { error } = await ctx.supabase.from("doctor_insurances").insert({
-    clinic_id: ctx.clinic.id, doctor_id: doctorId, insurer_id: insurer, plan_id: str(fd, "plan_id"),
-    coverage_percent: pct, copay: pct == null ? null : copay ?? 0, notes: str(fd, "notes"),
-  });
-  if (error) {
-    if (error.message.includes("doctor_insurances_uniq") || error.code === "23505") return { error: "Ese seguro (y plan) ya está cargado para este profesional" };
-    if (error.message.includes("doctor_insurances")) return { error: "Falta aplicar la actualización 0012 en la base de datos." };
-    return { error: dbError(error.message) };
-  }
-  return { ok: true };
-}
 
-export async function deleteDoctorInsurance(id: string, _: ActionState, __: FormData): Promise<ActionState> {
+/** Guarda de una vez los seguros tildados del profesional (reemplaza la lista anterior). */
+export async function saveDoctorInsurances(doctorId: string, _: ActionState, fd: FormData): Promise<ActionState> {
   const ctx = await getCtx();
-  const { error } = await ctx.supabase.from("doctor_insurances").delete().eq("id", id).eq("clinic_id", ctx.clinic.id);
-  return error ? { error: dbError(error.message) } : { ok: true };
+  let rows: { insurer_id: string; plan_id: string | null; coverage_percent: string; copay: string }[] = [];
+  try { rows = JSON.parse(String(fd.get("rows") ?? "[]")); } catch { return { error: "Datos inválidos" }; }
+  const clean = [];
+  for (const r of rows) {
+    const pct = r.coverage_percent === "" || r.coverage_percent == null ? null : Number(r.coverage_percent);
+    if (pct != null && (isNaN(pct) || pct < 0 || pct > 100)) return { error: "El porcentaje debe estar entre 0 y 100" };
+    const copay = r.copay === "" || r.copay == null ? null : Math.max(0, Number(String(r.copay).replace(/[^\d]/g, "")) || 0);
+    if (pct == null && copay) return { error: "Para cargar un copago propio indicá también el % que cubre" };
+    clean.push({ clinic_id: ctx.clinic.id, doctor_id: doctorId, insurer_id: r.insurer_id, plan_id: r.plan_id, coverage_percent: pct, copay: pct == null ? null : copay ?? 0 });
+  }
+  const del = await ctx.supabase.from("doctor_insurances").delete().eq("doctor_id", doctorId).eq("clinic_id", ctx.clinic.id);
+  if (del.error) return { error: dbError(del.error.message) };
+  if (clean.length) {
+    const { error } = await ctx.supabase.from("doctor_insurances").insert(clean);
+    if (error) return { error: dbError(error.message) };
+  }
+  return { ok: true, message: clean.length ? "Seguros guardados" : "Atiende todos los seguros" };
 }

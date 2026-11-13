@@ -1,13 +1,12 @@
 import { notFound } from "next/navigation";
 import { ShieldCheck, Trash2 } from "lucide-react";
 import { guard, can } from "@/lib/context";
-import { Badge, Card, Field, Input, Notice, PageHeader, Select } from "@/components/ui";
+import { Card, Field, Input, Notice, PageHeader, Select } from "@/components/ui";
 import { ActionButton, ActionForm, SubmitButton } from "@/components/ui/client";
 import { WEEKDAYS } from "@/lib/constants";
 import { DoctorFields } from "../fields";
-import { addDoctorInsurance, addSchedule, deleteDoctorInsurance, deleteSchedule, updateDoctor } from "../actions";
-import { InsurerPlanFields } from "../insurance-form";
-import { gs } from "@/lib/utils";
+import { addSchedule, deleteSchedule, saveDoctorInsurances, updateDoctor } from "../actions";
+import { DoctorInsurancesEditor } from "../insurance-form";
 
 export default async function DoctorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -20,11 +19,11 @@ export default async function DoctorPage({ params }: { params: Promise<{ id: str
     can(ctx.perms, "usuarios") ? ctx.supabase.rpc("clinic_users", { p_clinic: ctx.clinic.id }) : Promise.resolve({ data: [] }),
   ]);
   const [docIns, { data: insurers }, { data: plans }] = await Promise.all([
-    ctx.supabase.from("doctor_insurances").select("id, coverage_percent, copay, insurers(trade_name), insurance_plans(name)").eq("doctor_id", id),
+    ctx.supabase.from("doctor_insurances").select("insurer_id, plan_id, coverage_percent, copay").eq("doctor_id", id),
     ctx.supabase.from("insurers").select("id, trade_name").eq("clinic_id", ctx.clinic.id).eq("active", true).order("trade_name"),
     ctx.supabase.from("insurance_plans").select("id, insurer_id, name").eq("clinic_id", ctx.clinic.id).eq("active", true).order("name"),
   ]);
-  type DI = { id: string; coverage_percent: number | null; copay: number | null; insurers: { trade_name: string }; insurance_plans: { name: string } | null };
+  type DI = { insurer_id: string; plan_id: string | null; coverage_percent: number | null; copay: number | null };
   const insList = (docIns.data ?? []) as unknown as DI[];
   const insMissing = !!docIns.error;
   if (!d) notFound();
@@ -77,42 +76,9 @@ export default async function DoctorPage({ params }: { params: Promise<{ id: str
           {insMissing ? (
             <Notice tone="amber">Para usar esta sección falta aplicar la actualización <b>0012</b> en la base de datos.</Notice>
           ) : (
-            <div className="grid gap-6 lg:grid-cols-5">
-              <div className="lg:col-span-3">
-                {insList.length === 0 ? (
-                  <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                    <b>Atiende todos los seguros</b> con la cobertura que define cada plan. Si cargás al menos uno, sólo va a atender por los seguros de esta lista.
-                  </p>
-                ) : (
-                  <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
-                    {insList.map((x) => (
-                      <li key={x.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-                        <span className="min-w-0 flex-1">
-                          <span className="font-medium text-slate-800">{x.insurers.trade_name}</span>
-                          <span className="text-slate-500"> · {x.insurance_plans?.name ?? "Todos los planes"}</span>
-                        </span>
-                        {x.coverage_percent != null
-                          ? <Badge tone="blue">Cubre {Number(x.coverage_percent)}%{Number(x.copay) ? ` + copago ${gs(x.copay)}` : ""}</Badge>
-                          : <span className="text-xs text-slate-500">Cobertura según el plan</span>}
-                        {editable && <ActionButton action={deleteDoctorInsurance.bind(null, x.id)} variant="ghost" confirm="¿Quitar este seguro del profesional?"><Trash2 className="h-3.5 w-3.5" /></ActionButton>}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <p className="mt-2 text-xs text-slate-500">El porcentaje propio se aplica a las consultas con este profesional (al agendar y al facturar). Si lo dejás vacío, vale lo configurado en el plan de la aseguradora.</p>
-              </div>
-              {editable && (
-                <ActionForm action={addDoctorInsurance.bind(null, id)} resetOnSuccess className="lg:col-span-2">
-                  <p className="label">Agregar seguro</p>
-                  {(insurers ?? []).length === 0 ? <p className="text-sm text-slate-500">No hay aseguradoras cargadas. Creálas en <b>Aseguradoras</b>.</p> : (
-                    <>
-                      <div className="grid gap-3 sm:grid-cols-2"><InsurerPlanFields insurers={insurers ?? []} plans={plans ?? []} /></div>
-                      <div className="mt-3 flex justify-end"><SubmitButton size="sm">Agregar</SubmitButton></div>
-                    </>
-                  )}
-                </ActionForm>
-              )}
-            </div>
+            <DoctorInsurancesEditor insurers={insurers ?? []} plans={plans ?? []} editable={editable}
+              initial={insList.map((x) => ({ insurer_id: x.insurer_id, plan_id: x.plan_id, coverage_percent: x.coverage_percent, copay: x.copay }))}
+              action={saveDoctorInsurances.bind(null, id)} />
           )}
         </Card>
       </div>
