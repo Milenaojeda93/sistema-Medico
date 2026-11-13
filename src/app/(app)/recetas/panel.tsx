@@ -11,8 +11,8 @@ const COMMON = ["Paracetamol", "Ibuprofeno", "Amoxicilina", "Amoxicilina + Ácid
 
 type Rx = { id: string; number: string; issued_at: string; status: string; prescription_items: (RxItem & { position: number })[] };
 
-export async function PrescriptionPanel({ ctx, patientId, doctorId, consultationId, diagnosis, allergies }: {
-  ctx: Ctx; patientId: string; doctorId: string; consultationId: string; diagnosis: string | null; allergies: string | null;
+export async function PrescriptionPanel({ ctx, patientId, doctorId, consultationId, diagnosis, allergies, readOnly = false }: {
+  ctx: Ctx; patientId: string; doctorId: string; consultationId: string; diagnosis: string | null; allergies: string | null; readOnly?: boolean;
 }) {
   if (!can(ctx.perms, "recetas")) return null;
   const sel = "id, number, issued_at, status, prescription_items(drug, presentation, dose, frequency, duration, quantity, route, instructions, position)";
@@ -52,7 +52,7 @@ export async function PrescriptionPanel({ ctx, patientId, doctorId, consultation
           ))}
         </ul>
       )}
-      {can(ctx.perms, "recetas", "create") ? (
+      {can(ctx.perms, "recetas", "create") && !readOnly ? (
         <PrescriptionBuilder patientId={patientId} doctorId={doctorId} consultationId={consultationId} defaultDiagnosis={diagnosis ?? ""}
           allergies={allergies} suggestions={suggestions} previous={previous} />
       ) : !list.length && <p className="text-sm text-slate-500">Sin recetas en esta consulta.</p>}
