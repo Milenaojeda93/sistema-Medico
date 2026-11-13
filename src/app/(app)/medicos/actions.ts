@@ -13,6 +13,16 @@ function payload(fd: FormData) {
   };
 }
 
+/** Guarda el costo de consulta particular por separado: si la columna aún no existe en la base, no rompe el guardado. */
+async function saveFee(ctx: Awaited<ReturnType<typeof getCtx>>, doctorId: string, fd: FormData): Promise<string | null> {
+  if (!fd.has("consultation_fee")) return null;
+  const raw = String(fd.get("consultation_fee") ?? "").replace(/[^\d]/g, "");
+  const fee = raw ? Number(raw) : null;
+  const { error } = await ctx.supabase.from("doctors").update({ consultation_fee: fee }).eq("id", doctorId);
+  if (error) return error.message.includes("consultation_fee") ? "Los datos se guardaron, pero el costo de consulta todavía no se puede guardar: falta aplicar la actualización 0011 en la base de datos." : dbError(error.message);
+  return null;
+}
+
 async function syncSpecialties(ctx: Awaited<ReturnType<typeof getCtx>>, doctorId: string, fd: FormData) {
   const ids = fd.getAll("specialties").map(String);
   await ctx.supabase.from("doctor_specialties").delete().eq("doctor_id", doctorId);
@@ -31,6 +41,7 @@ export async function createDoctor(_: ActionState, fd: FormData): Promise<Action
   if (error) return { error: error.message.includes("license") ? "Ya existe un profesional con esa matrícula" : dbError(error.message) };
   const e = await syncSpecialties(ctx, data.id, fd);
   if (e) return { error: e };
+  await saveFee(ctx, data.id, fd);
   redirect(`/medicos/${data.id}`);
 }
 
@@ -41,7 +52,9 @@ export async function updateDoctor(id: string, _: ActionState, fd: FormData): Pr
   const { error } = await ctx.supabase.from("doctors").update({ ...p, active: fd.get("active") === "on" }).eq("id", id);
   if (error) return { error: dbError(error.message) };
   const e = await syncSpecialties(ctx, id, fd);
-  return e ? { error: e } : { ok: true, message: "Datos guardados" };
+  if (e) return { error: e };
+  const f = await saveFee(ctx, id, fd);
+  return f ? { error: f } : { ok: true, message: "Datos guardados" };
 }
 
 export async function addSchedule(doctorId: string, _: ActionState, fd: FormData): Promise<ActionState> {

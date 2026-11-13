@@ -40,10 +40,17 @@ export default async function Agenda({ searchParams }: { searchParams: Promise<{
     ctx.supabase.from("doctors").select("id, full_name, room_id, doctor_specialties(specialty_id)").eq("clinic_id", ctx.clinic.id).eq("active", true).order("full_name"),
     ctx.supabase.from("rooms").select("id, name").eq("clinic_id", ctx.clinic.id).eq("active", true).order("name"),
     ctx.supabase.from("specialties").select("id, name").eq("clinic_id", ctx.clinic.id).eq("active", true).order("name"),
-    ctx.supabase.from("patients").select("id, first_name, last_name, document").eq("clinic_id", ctx.clinic.id).eq("archived", false).order("last_name").limit(5000),
-    ctx.supabase.from("v_patient_insurances").select("id, patient_id, insurer_name, plan_name, member_number, effective_status").eq("clinic_id", ctx.clinic.id),
+    ctx.supabase.from("patients").select("id, first_name, last_name, document, phone").eq("clinic_id", ctx.clinic.id).eq("archived", false).order("last_name").limit(5000),
+    ctx.supabase.from("v_patient_insurances").select("id, patient_id, plan_id, insurer_name, plan_name, member_number, effective_status").eq("clinic_id", ctx.clinic.id),
     ctx.supabase.from("doctor_schedules").select("doctor_id, weekday, start_time, end_time").eq("clinic_id", ctx.clinic.id),
   ]);
+  // Costos: honorario del médico (si la columna existe), precio de consulta por especialidad y cobertura de los planes.
+  const [fees, { data: services }, { data: coverages }] = await Promise.all([
+    ctx.supabase.from("doctors").select("id, consultation_fee").eq("clinic_id", ctx.clinic.id),
+    ctx.supabase.from("services").select("specialty_id, price").eq("clinic_id", ctx.clinic.id).eq("category", "consulta").eq("active", true),
+    ctx.supabase.from("plan_coverages").select("plan_id, specialty_id, covered, coverage_percent, copay, max_amount, requires_authorization").eq("clinic_id", ctx.clinic.id).eq("category", "consulta"),
+  ]);
+  const feeBy = new Map<string, number | null>(fees.error ? [] : (fees.data ?? []).map((f) => [f.id as string, f.consultation_fee == null ? null : Number(f.consultation_fee)]));
 
   return (
     <>
@@ -57,10 +64,12 @@ export default async function Agenda({ searchParams }: { searchParams: Promise<{
         tz={ctx.tz}
         doctorFilter={docFilter}
         appointments={(appts ?? []) as never}
-        doctors={(doctors ?? []).filter((d) => !ctx.ownOnly || ctx.myDoctorIds.includes(d.id)).map((d) => ({ id: d.id, full_name: d.full_name, room_id: d.room_id, specialties: (d.doctor_specialties as { specialty_id: string }[]).map((x) => x.specialty_id) }))}
+        doctors={(doctors ?? []).filter((d) => !ctx.ownOnly || ctx.myDoctorIds.includes(d.id)).map((d) => ({ id: d.id, full_name: d.full_name, room_id: d.room_id, fee: feeBy.get(d.id) ?? null, specialties: (d.doctor_specialties as { specialty_id: string }[]).map((x) => x.specialty_id) }))}
         rooms={rooms ?? []}
         specialties={specialties ?? []}
-        patients={(patients ?? []).map((p) => ({ id: p.id, name: `${p.last_name}, ${p.first_name}`, document: p.document }))}
+        patients={(patients ?? []).map((p) => ({ id: p.id, name: `${p.last_name}, ${p.first_name}`, document: p.document, phone: p.phone }))}
+        consultPrices={(services ?? []).map((x) => ({ specialty_id: x.specialty_id, price: Number(x.price) }))}
+        coverages={(coverages ?? []).map((c) => ({ ...c, coverage_percent: Number(c.coverage_percent), copay: Number(c.copay), max_amount: c.max_amount == null ? null : Number(c.max_amount) }))}
         insurances={insurances ?? []}
         schedules={schedules ?? []}
         canCreate={can(ctx.perms, "agenda", "create")}

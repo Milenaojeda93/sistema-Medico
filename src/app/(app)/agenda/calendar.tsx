@@ -7,7 +7,8 @@ import { CalendarCheck, ChevronLeft, ChevronRight, Plus, ShieldCheck, Wallet, X,
 import { btnClass, Field, Input, Select, Textarea, StatusBadge } from "@/components/ui";
 import { SubmitButton, type ActionState } from "@/components/ui/client";
 import { APPOINTMENT_STATUS } from "@/lib/constants";
-import { addDays, cn, fmtTime, isoDate, toLocalInput, zonedParts } from "@/lib/utils";
+import { addDays, cn, fmtTime, gs, isoDate, toLocalInput, zonedParts } from "@/lib/utils";
+import { DoctorCards, PatientPicker, SpecialtyChips } from "./pickers";
 import { getDoctorBusy, saveAppointment, setAppointmentStatus, type Busy } from "./actions";
 
 type Appt = {
@@ -17,15 +18,17 @@ type Appt = {
   doctors: { full_name: string }; specialties: { name: string } | null; rooms: { name: string } | null;
   patient_insurances: { member_number: string; insurers: { trade_name: string }; insurance_plans: { name: string } } | null;
 };
-type Doctor = { id: string; full_name: string; room_id: string | null; specialties: string[] };
+type Doctor = { id: string; full_name: string; room_id: string | null; specialties: string[]; fee: number | null };
 type Opt = { id: string; name: string };
-type Ins = { id: string; patient_id: string; insurer_name: string; plan_name: string; member_number: string; effective_status: string };
+type Ins = { id: string; patient_id: string; plan_id: string; insurer_name: string; plan_name: string; member_number: string; effective_status: string };
+type Cov = { plan_id: string; specialty_id: string | null; covered: boolean; coverage_percent: number; copay: number; max_amount: number | null; requires_authorization: boolean };
 type Sched = { doctor_id: string; weekday: number; start_time: string; end_time: string };
 
 type Props = {
   view: "dia" | "semana" | "mes"; date: string; from: string; today: string; tz: string; doctorFilter: string;
   appointments: Appt[]; doctors: Doctor[]; rooms: Opt[]; specialties: Opt[];
-  patients: { id: string; name: string; document: string }[]; insurances: Ins[]; schedules: Sched[];
+  patients: { id: string; name: string; document: string; phone: string | null }[]; insurances: Ins[]; schedules: Sched[];
+  consultPrices: { specialty_id: string | null; price: number }[]; coverages: Cov[];
   canCreate: boolean; canEdit: boolean; canConsult: boolean; openNewFor: string | null;
 };
 
@@ -329,9 +332,8 @@ const LOOKAHEAD = 28;
 function weekdayOf(iso: string) { return new Date(iso + "T12:00:00Z").getUTCDay(); }
 function hhmm(min: number) { return `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`; }
 
-function AppointmentForm({ appt, start, doctorId, patientId, doctors, rooms, specialties, patients, insurances, schedules, today, tz, onDone }: Props & { appt?: Appt; start?: string; doctorId?: string; patientId?: string; onDone: () => void }) {
+function AppointmentForm({ appt, start, doctorId, patientId, doctors, rooms, specialties, patients, insurances, schedules, consultPrices, coverages, today, tz, onDone }: Props & { appt?: Appt; start?: string; doctorId?: string; patientId?: string; onDone: () => void }) {
   const [state, action] = useActionState(saveAppointment.bind(null, appt?.id ?? null), null as ActionState);
-  const [search, setSearch] = useState("");
   const [pid, setPid] = useState(appt?.patient_id ?? patientId ?? "");
   const initialDoctor = doctors.find((d) => d.id === (appt?.doctor_id ?? doctorId));
   const [sid, setSid] = useState(appt?.specialty_id ?? initialDoctor?.specialties[0] ?? "");
@@ -346,17 +348,36 @@ function AppointmentForm({ appt, start, doctorId, patientId, doctors, rooms, spe
   const [loading, startLoading] = useTransition();
   useEffect(() => { if (state?.ok) onDone(); }, [state, onDone]);
 
-  const filtered = useMemo(() => {
-    const t = search.trim().toLowerCase();
-    const list = t ? patients.filter((p) => p.name.toLowerCase().includes(t) || p.document.includes(t)) : patients;
-    const sel = patients.find((p) => p.id === pid);
-    return sel && !list.includes(sel) ? [sel, ...list.slice(0, 199)] : list.slice(0, 200);
-  }, [search, patients, pid]);
   const patIns = insurances.filter((i) => i.patient_id === pid);
   const activeIns = patIns.filter((i) => i.effective_status === "activo");
   const specDoctors = sid ? doctors.filter((d) => d.specialties.includes(sid)) : doctors;
   const doctor = doctors.find((d) => d.id === did);
   const docSched = schedules.filter((s) => s.doctor_id === did);
+  const [insId, setInsId] = useState(appt?.patient_insurance_id ?? "");
+  const ins = activeIns.find((i) => i.id === insId) ?? activeIns[0];
+
+  // Costo: honorario del médico → precio de consulta de la especialidad → consulta general.
+  const priceFor = (d: Doctor, spec = sid) => {
+    if (d.fee != null) return d.fee;
+    const specs = spec ? [spec] : d.specialties;
+    const bySpec = consultPrices.find((c) => c.specialty_id && specs.includes(c.specialty_id));
+    return bySpec?.price ?? consultPrices.find((c) => !c.specialty_id)?.price ?? null;
+  };
+  const price = doctor ? priceFor(doctor) : null;
+  const estimate = useMemo(() => {
+    if (care !== "seguro" || !ins || price == null) return null;
+    const spec = sid || doctor?.specialties[0] || null;
+    const plan = coverages.filter((c) => c.plan_id === ins.plan_id);
+    const cov = plan.find((c) => c.specialty_id && c.specialty_id === spec) ?? plan.find((c) => !c.specialty_id);
+    if (!cov) return { patient: price, insurer: 0, note: "El plan no contempla consultas: el paciente abona el total." };
+    if (!cov.covered) return { patient: price, insurer: 0, note: "Consulta excluida por el plan: el paciente abona el total." };
+    const copay = Math.min(price, cov.copay);
+    let patient = copay + Math.round(((price - copay) * (100 - cov.coverage_percent)) / 100);
+    let insurer = price - patient;
+    if (cov.max_amount != null && insurer > cov.max_amount) { insurer = cov.max_amount; patient = price - insurer; }
+    const parts = [`Cubre ${cov.coverage_percent}%`, copay > 0 ? `copago ${gs(copay)}` : ""].filter(Boolean).join(" + ");
+    return { patient, insurer, note: parts + (cov.requires_authorization ? " · requiere autorización de la aseguradora" : "") };
+  }, [care, ins, price, sid, doctor, coverages]);
 
   useEffect(() => { if (care === "seguro" && pid && activeIns.length === 0) setCare("particular"); }, [pid]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -415,27 +436,20 @@ function AppointmentForm({ appt, start, doctorId, patientId, doctors, rooms, spe
 
   return (
     <form action={action} className="space-y-5">
-      <Field label="Paciente" required>
-        <input placeholder="Buscar por nombre o documento…" value={search} onChange={(e) => setSearch(e.target.value)} className="input mb-2" />
-        <Select name="patient_id" value={pid} onChange={(e) => setPid(e.target.value)} required size={4} className="h-auto">
-          {filtered.map((p) => <option key={p.id} value={p.id}>{p.name} — CI {p.document}</option>)}
-        </Select>
-        <p className="mt-1 text-xs text-slate-400">¿No está registrado? <Link href="/pacientes/nuevo" className="text-primary-600 hover:underline">Registrar paciente</Link></p>
-      </Field>
+      <div>
+        <p className="label">Paciente <span className="text-rose-500">*</span></p>
+        <PatientPicker patients={patients} value={pid} onChange={setPid} />
+      </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="1. Especialidad" name="specialty_id">
-          <Select name="specialty_id" value={sid} onChange={(e) => pickSpecialty(e.target.value)}>
-            <option value="">Todas las especialidades</option>
-            {specialties.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </Select>
-        </Field>
-        <Field label="2. Profesional" name="doctor_id" required>
-          <Select name="doctor_id" value={did} onChange={(e) => pickDoctor(e.target.value)} required>
-            <option value="">{specDoctors.length ? `Seleccioná (${specDoctors.length} disponibles)…` : "No hay médicos con esta especialidad"}</option>
-            {specDoctors.map((d) => <option key={d.id} value={d.id}>{d.full_name}</option>)}
-          </Select>
-        </Field>
+      <div className="space-y-3">
+        <div>
+          <p className="label">1. Especialidad</p>
+          <SpecialtyChips specialties={specialties} value={sid} onChange={pickSpecialty} />
+        </div>
+        <div>
+          <p className="label">2. Profesional <span className="text-rose-500">*</span> {specDoctors.length > 0 && <span className="font-normal text-slate-400">· {specDoctors.length} disponible{specDoctors.length === 1 ? "" : "s"}</span>}</p>
+          <DoctorCards doctors={specDoctors} specialties={specialties} value={did} onChange={pickDoctor} priceFor={(d) => priceFor(d as Doctor)} />
+        </div>
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
@@ -542,12 +556,41 @@ function AppointmentForm({ appt, start, doctorId, patientId, doctors, rooms, spe
         {pid && activeIns.length === 0 && <p className="mt-2 text-xs text-slate-500">{patIns.length ? "El paciente no tiene seguros con cobertura activa (vencidos o suspendidos)." : "El paciente no tiene seguros registrados."}</p>}
         {care === "seguro" && (
           <Field label="Aseguradora y plan" name="patient_insurance_id" required className="mt-3">
-            <Select name="patient_insurance_id" defaultValue={appt?.patient_insurance_id ?? activeIns[0]?.id} required>
+            <Select name="patient_insurance_id" value={ins?.id ?? ""} onChange={(e) => setInsId(e.target.value)} required>
               {activeIns.map((i) => <option key={i.id} value={i.id}>{i.insurer_name} — {i.plan_name} (afiliado {i.member_number})</option>)}
             </Select>
           </Field>
         )}
       </div>
+      {doctor && (
+        <div className={cn("rounded-2xl p-4 ring-1", care === "seguro" ? "bg-primary-50/50 ring-primary-100" : "bg-orange-50/60 ring-orange-100")}>
+          {price == null ? (
+            <p className="text-sm text-slate-600">
+              {doctor.full_name} no tiene cargado el costo de la consulta. Cargalo en <Link href={`/medicos/${doctor.id}`} className="font-medium text-primary-700 underline">su ficha</Link>.
+            </p>
+          ) : care === "seguro" && estimate ? (
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-primary-700">Paciente abona (estimado)</p>
+                <p className="text-2xl font-semibold tabular-nums text-slate-900">{gs(estimate.patient)}</p>
+                <p className="mt-0.5 text-xs text-slate-500">{estimate.note}</p>
+              </div>
+              <div className="text-right text-xs text-slate-500">
+                <p>Consulta: <span className="tabular-nums text-slate-700">{gs(price)}</span></p>
+                <p>Cubre {ins?.insurer_name}: <span className="tabular-nums text-slate-700">{gs(estimate.insurer)}</span></p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-orange-700">Costo de la consulta particular</p>
+                <p className="text-xs text-slate-500">{doctor.full_name}{doctor.fee == null ? " · precio de lista de la especialidad" : ""}</p>
+              </div>
+              <p className="text-2xl font-semibold tabular-nums text-slate-900">{gs(price)}</p>
+            </div>
+          )}
+        </div>
+      )}
       <Field label="Motivo de consulta" name="reason"><Input name="reason" defaultValue={appt?.reason ?? ""} /></Field>
       <Field label="Notas internas" name="notes"><Textarea name="notes" rows={2} defaultValue={appt?.notes ?? ""} /></Field>
       {state?.error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-100">{state.error}</p>}

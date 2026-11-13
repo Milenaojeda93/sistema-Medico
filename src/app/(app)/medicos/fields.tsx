@@ -11,6 +11,9 @@ export function DoctorFields({ d, rooms, specialties, selected, users }: { d?: D
         <Field label="Matrícula profesional" name="license_number" required><Input name="license_number" defaultValue={v("license_number")} required /></Field>
         <Field label="Teléfono" name="phone"><Input name="phone" defaultValue={v("phone")} /></Field>
         <Field label="Correo" name="email"><Input name="email" type="email" defaultValue={v("email")} /></Field>
+        <Field label="Costo de consulta particular (Gs)" name="consultation_fee" hint="Se muestra al agendar. Vacío = precio del servicio de consulta">
+          <Input name="consultation_fee" type="number" min={0} step={1000} inputMode="numeric" placeholder="Ej.: 250000" defaultValue={d?.consultation_fee != null ? String(Number(d.consultation_fee)) : ""} />
+        </Field>
         <Field label="Consultorio habitual" name="room_id">
           <Select name="room_id" defaultValue={v("room_id")}><option value="">—</option>{rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</Select>
         </Field>
