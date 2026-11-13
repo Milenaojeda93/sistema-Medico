@@ -135,31 +135,40 @@ export function DoctorCards({ doctors, specialties, value, onChange, priceFor }:
 }) {
   const [q, setQ] = useState("");
   const name = (id: string) => specialties.find((s) => s.id === id)?.name;
-  const list = q.trim() ? doctors.filter((d) => norm(d.full_name).includes(norm(q.trim()))) : doctors;
+  const words = norm(q.trim()).split(/\s+/).filter(Boolean);
+  const list = words.length
+    ? doctors.filter((d) => { const t = norm(`${d.full_name} ${d.specialties.map(name).join(" ")}`); return words.every((w) => t.includes(w)); })
+    : doctors;
   return (
     <div>
       <input name="doctor_id" value={value} required onChange={() => {}} tabIndex={-1} aria-hidden="true" className="sr-only" />
-      {doctors.length > 6 && (
+      {doctors.length > 1 && (
         <div className="relative mb-2">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filtrar profesionales…" className="input h-9 pl-8 text-sm" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscá el profesional por nombre o especialidad…" autoComplete="off"
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (list.length === 1) { onChange(list[0].id); setQ(""); } } }}
+            className="input h-10 pl-9 pr-9 text-sm" />
+          {q && <button type="button" aria-label="Limpiar búsqueda" onClick={() => setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>}
         </div>
+      )}
+      {doctors.length > 0 && list.length === 0 && (
+        <p className="rounded-xl bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">Ningún profesional coincide con «{q.trim()}».</p>
       )}
       {doctors.length === 0 ? (
         <p className="rounded-xl bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">No hay médicos con esta especialidad.</p>
       ) : (
         <div className="grid max-h-[232px] gap-2 overflow-auto p-0.5 sm:grid-cols-2">
-          {list.map((d) => {
+          {(value && !list.some((d) => d.id === value) ? [...doctors.filter((d) => d.id === value), ...list] : list).map((d) => {
             const price = priceFor(d);
             const on = d.id === value;
             return (
-              <button type="button" key={d.id} onClick={() => onChange(d.id)}
+              <button type="button" key={d.id} onClick={() => { onChange(d.id); setQ(""); }}
                 className={cn("flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition",
                   on ? "border-primary-500 bg-primary-50/60 ring-1 ring-primary-500" : "border-slate-200 bg-white hover:border-primary-300")}>
                 <Avatar id={d.id} text={docInitials(d.full_name)} />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-slate-800">{d.full_name}</span>
-                  <span className="block truncate text-xs text-slate-500">{d.specialties.map(name).filter(Boolean).join(" · ") || "Sin especialidad"}</span>
+                  <span className="block text-sm font-semibold leading-snug text-slate-800">{d.full_name}</span>
+                  <span className="block truncate text-xs text-slate-500" title={d.specialties.map(name).filter(Boolean).join(" · ")}>{d.specialties.map(name).filter(Boolean).join(" · ") || "Sin especialidad"}</span>
                 </span>
                 <span className="shrink-0 text-right">
                   {price != null
