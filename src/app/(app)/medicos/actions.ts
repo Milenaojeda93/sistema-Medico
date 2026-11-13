@@ -72,3 +72,31 @@ export async function deleteSchedule(id: string, _: ActionState, __: FormData): 
   const { error } = await ctx.supabase.from("doctor_schedules").delete().eq("id", id);
   return error ? { error: dbError(error.message) } : { ok: true };
 }
+
+export async function addDoctorInsurance(doctorId: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  const ctx = await getCtx();
+  const insurer = str(fd, "insurer_id");
+  if (!insurer) return { error: "Elegí la aseguradora" };
+  const pctRaw = str(fd, "coverage_percent");
+  const copayRaw = str(fd, "copay");
+  const pct = pctRaw == null ? null : Number(pctRaw);
+  if (pct != null && (isNaN(pct) || pct < 0 || pct > 100)) return { error: "El porcentaje debe estar entre 0 y 100" };
+  const copay = copayRaw == null ? null : Number(copayRaw.replace(/[^\d]/g, ""));
+  if (pct == null && copay != null) return { error: "Para cargar un copago propio indicá también el porcentaje de cobertura" };
+  const { error } = await ctx.supabase.from("doctor_insurances").insert({
+    clinic_id: ctx.clinic.id, doctor_id: doctorId, insurer_id: insurer, plan_id: str(fd, "plan_id"),
+    coverage_percent: pct, copay: pct == null ? null : copay ?? 0, notes: str(fd, "notes"),
+  });
+  if (error) {
+    if (error.message.includes("doctor_insurances_uniq") || error.code === "23505") return { error: "Ese seguro (y plan) ya está cargado para este profesional" };
+    if (error.message.includes("doctor_insurances")) return { error: "Falta aplicar la actualización 0012 en la base de datos." };
+    return { error: dbError(error.message) };
+  }
+  return { ok: true };
+}
+
+export async function deleteDoctorInsurance(id: string, _: ActionState, __: FormData): Promise<ActionState> {
+  const ctx = await getCtx();
+  const { error } = await ctx.supabase.from("doctor_insurances").delete().eq("id", id).eq("clinic_id", ctx.clinic.id);
+  return error ? { error: dbError(error.message) } : { ok: true };
+}

@@ -7,12 +7,21 @@ import { num, str } from "@/lib/utils";
 
 export type PreviewLine = { covered: boolean; coverage_percent: number; copay: number; insurer_amount: number; patient_amount: number; requires_authorization: boolean; authorization_id: string | null; note: string };
 
-export async function previewCoverage(patientInsuranceId: string | null, items: { service_id: string; quantity: number; unit_price: number }[]): Promise<{ lines?: PreviewLine[]; error?: string }> {
+export async function previewCoverage(patientInsuranceId: string | null, items: { service_id: string; quantity: number; unit_price: number }[], refs?: { appointmentId: string | null; consultationId: string | null }): Promise<{ lines?: PreviewLine[]; error?: string }> {
   const ctx = await getCtx();
   const lines: PreviewLine[] = [];
+  // Profesional de la cita/consulta, para aplicar su convenio con el seguro.
+  let doctor: string | null = null;
+  if (patientInsuranceId && refs?.appointmentId) doctor = (await ctx.supabase.from("appointments").select("doctor_id").eq("id", refs.appointmentId).maybeSingle()).data?.doctor_id ?? null;
+  if (patientInsuranceId && !doctor && refs?.consultationId) doctor = (await ctx.supabase.from("consultations").select("doctor_id").eq("id", refs.consultationId).maybeSingle()).data?.doctor_id ?? null;
   for (const it of items) {
     if (!it.service_id) { lines.push({ covered: false, coverage_percent: 0, copay: 0, insurer_amount: 0, patient_amount: 0, requires_authorization: false, authorization_id: null, note: "" }); continue; }
-    const { data, error } = await ctx.supabase.rpc("compute_coverage", { p_patient_insurance: patientInsuranceId, p_service: it.service_id, p_unit_price: it.unit_price, p_quantity: it.quantity });
+    let { data, error } = doctor
+      ? await ctx.supabase.rpc("compute_coverage_doctor", { p_patient_insurance: patientInsuranceId, p_service: it.service_id, p_unit_price: it.unit_price, p_quantity: it.quantity, p_doctor: doctor })
+      : await ctx.supabase.rpc("compute_coverage", { p_patient_insurance: patientInsuranceId, p_service: it.service_id, p_unit_price: it.unit_price, p_quantity: it.quantity });
+    if (error && doctor && error.message.includes("compute_coverage_doctor")) {
+      ({ data, error } = await ctx.supabase.rpc("compute_coverage", { p_patient_insurance: patientInsuranceId, p_service: it.service_id, p_unit_price: it.unit_price, p_quantity: it.quantity }));
+    }
     if (error) return { error: error.message };
     const r = (data as PreviewLine[])[0];
     lines.push({ ...r, insurer_amount: Number(r.insurer_amount), patient_amount: Number(r.patient_amount), copay: Number(r.copay), coverage_percent: Number(r.coverage_percent) });

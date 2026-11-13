@@ -31,7 +31,7 @@ export function InvoiceForm({ patients, insurances, services, defaultPatient, co
   const payload = useMemo(() => lines.map(({ service_id, quantity, unit_price }) => ({ service_id, quantity, unit_price })), [lines]);
   useEffect(() => {
     const t = setTimeout(() => start(async () => {
-      const r = await previewCoverage(insId || null, payload);
+      const r = await previewCoverage(insId || null, payload, { appointmentId: appointmentId ?? null, consultationId: consultationId ?? null });
       if (r.error) setErr(r.error); else { setErr(null); setPreview(r.lines ?? []); }
     }), 250);
     return () => clearTimeout(t);

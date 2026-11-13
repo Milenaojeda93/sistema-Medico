@@ -18,9 +18,10 @@ type Appt = {
   doctors: { full_name: string }; specialties: { name: string } | null; rooms: { name: string } | null;
   patient_insurances: { member_number: string; insurers: { trade_name: string }; insurance_plans: { name: string } } | null;
 };
-type Doctor = { id: string; full_name: string; room_id: string | null; specialties: string[]; fee: number | null };
+type DocIns = { insurer_id: string; plan_id: string | null; coverage_percent: number | null; copay: number | null };
+type Doctor = { id: string; full_name: string; room_id: string | null; specialties: string[]; fee: number | null; insurances: DocIns[] };
 type Opt = { id: string; name: string };
-type Ins = { id: string; patient_id: string; plan_id: string; insurer_name: string; plan_name: string; member_number: string; effective_status: string };
+type Ins = { id: string; patient_id: string; plan_id: string; insurer_id: string; insurer_name: string; plan_name: string; member_number: string; effective_status: string };
 type Cov = { plan_id: string; specialty_id: string | null; covered: boolean; coverage_percent: number; copay: number; max_amount: number | null; requires_authorization: boolean };
 type Sched = { doctor_id: string; weekday: number; start_time: string; end_time: string };
 
@@ -366,6 +367,17 @@ function AppointmentForm({ appt, start, doctorId, patientId, doctors, rooms, spe
   const price = doctor ? priceFor(doctor) : null;
   const estimate = useMemo(() => {
     if (care !== "seguro" || !ins || price == null) return null;
+    // Convenio del profesional: si tiene seguros cargados, sólo atiende esos.
+    const dIns = doctor?.insurances ?? [];
+    if (dIns.length) {
+      const deal = dIns.find((x) => x.insurer_id === ins.insurer_id && x.plan_id === ins.plan_id) ?? dIns.find((x) => x.insurer_id === ins.insurer_id && !x.plan_id);
+      if (!deal) return { patient: price, insurer: 0, note: `${doctor?.full_name} no atiende por ${ins.insurer_name}: el paciente abona el total.`, warn: true };
+      if (deal.coverage_percent != null) {
+        const copay = Math.min(price, deal.copay ?? 0);
+        const patient = copay + Math.round(((price - copay) * (100 - deal.coverage_percent)) / 100);
+        return { patient, insurer: price - patient, note: `Convenio del profesional: cubre ${deal.coverage_percent}%${copay ? ` + copago ${gs(copay)}` : ""}` };
+      }
+    }
     const spec = sid || doctor?.specialties[0] || null;
     const plan = coverages.filter((c) => c.plan_id === ins.plan_id);
     const cov = plan.find((c) => c.specialty_id && c.specialty_id === spec) ?? plan.find((c) => !c.specialty_id);
@@ -573,7 +585,7 @@ function AppointmentForm({ appt, start, doctorId, patientId, doctors, rooms, spe
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-primary-700">Paciente abona (estimado)</p>
                 <p className="text-2xl font-semibold tabular-nums text-slate-900">{gs(estimate.patient)}</p>
-                <p className="mt-0.5 text-xs text-slate-500">{estimate.note}</p>
+                <p className={cn("mt-0.5 text-xs", "warn" in estimate && estimate.warn ? "font-medium text-amber-700" : "text-slate-500")}>{estimate.note}</p>
               </div>
               <div className="text-right text-xs text-slate-500">
                 <p>Consulta: <span className="tabular-nums text-slate-700">{gs(price)}</span></p>
