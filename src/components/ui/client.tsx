@@ -12,14 +12,14 @@ export type FormAction = (prev: ActionState, fd: FormData) => Promise<ActionStat
 
 const ModalCtx = createContext<{ close: () => void } | null>(null);
 
-export function SubmitButton({ children, variant = "primary", size = "md", className, confirm, name, value }: { children: ReactNode; variant?: BtnVariant; size?: "sm" | "md"; className?: string; confirm?: string; name?: string; value?: string }) {
+export function SubmitButton({ children, variant = "primary", size = "md", className, confirm, name, value, disabled }: { children: ReactNode; variant?: BtnVariant; size?: "sm" | "md"; className?: string; confirm?: string; name?: string; value?: string; disabled?: boolean }) {
   const { pending } = useFormStatus();
   return (
     <button
       type="submit"
       name={name}
       value={value}
-      disabled={pending}
+      disabled={pending || disabled}
       className={cn(btnClass(variant, size), className)}
       onClick={(e) => {
         if (confirm && !window.confirm(confirm)) e.preventDefault();

@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, ShieldCheck, Wallet, X, Stethoscope, User } from "lucide-react";
+import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { CalendarCheck, ChevronLeft, ChevronRight, Plus, ShieldCheck, Wallet, X, Stethoscope, User } from "lucide-react";
 import { btnClass, Field, Input, Select, Textarea, StatusBadge } from "@/components/ui";
 import { SubmitButton, type ActionState } from "@/components/ui/client";
 import { APPOINTMENT_STATUS } from "@/lib/constants";
-import { addDays, cn, fmtTime, toLocalInput, zonedParts } from "@/lib/utils";
-import { saveAppointment, setAppointmentStatus } from "./actions";
+import { addDays, cn, fmtTime, isoDate, toLocalInput, zonedParts } from "@/lib/utils";
+import { getDoctorBusy, saveAppointment, setAppointmentStatus, type Busy } from "./actions";
 
 type Appt = {
   id: string; starts_at: string; ends_at: string; status: string; care_type: string; reason: string | null; notes: string | null;
@@ -323,12 +323,27 @@ function AppointmentDetail({ a, tz, canEdit, canConsult, onEdit, onDone }: { a: 
   );
 }
 
-function AppointmentForm({ appt, start, doctorId, patientId, doctors, rooms, specialties, patients, insurances, tz, onDone }: Props & { appt?: Appt; start?: string; doctorId?: string; patientId?: string; onDone: () => void }) {
+const WD_SHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+const MON_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const LOOKAHEAD = 28;
+function weekdayOf(iso: string) { return new Date(iso + "T12:00:00Z").getUTCDay(); }
+function hhmm(min: number) { return `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`; }
+
+function AppointmentForm({ appt, start, doctorId, patientId, doctors, rooms, specialties, patients, insurances, schedules, today, tz, onDone }: Props & { appt?: Appt; start?: string; doctorId?: string; patientId?: string; onDone: () => void }) {
   const [state, action] = useActionState(saveAppointment.bind(null, appt?.id ?? null), null as ActionState);
   const [search, setSearch] = useState("");
   const [pid, setPid] = useState(appt?.patient_id ?? patientId ?? "");
-  const [did, setDid] = useState(appt?.doctor_id ?? doctorId ?? "");
+  const initialDoctor = doctors.find((d) => d.id === (appt?.doctor_id ?? doctorId));
+  const [sid, setSid] = useState(appt?.specialty_id ?? initialDoctor?.specialties[0] ?? "");
+  const [did, setDid] = useState(initialDoctor?.id ?? "");
   const [care, setCare] = useState(appt?.care_type ?? "particular");
+  const initialLocal = appt ? toLocalInput(appt.starts_at, tz) : start ?? "";
+  const [day, setDay] = useState(initialLocal.slice(0, 10));
+  const [time, setTime] = useState(initialLocal.slice(11, 16));
+  const [duration, setDuration] = useState(appt ? Math.round((new Date(appt.ends_at).getTime() - new Date(appt.starts_at).getTime()) / 60000) : 30);
+  const [manual, setManual] = useState(false);
+  const [busy, setBusy] = useState<Busy[] | null>(null);
+  const [loading, startLoading] = useTransition();
   useEffect(() => { if (state?.ok) onDone(); }, [state, onDone]);
 
   const filtered = useMemo(() => {
@@ -339,38 +354,170 @@ function AppointmentForm({ appt, start, doctorId, patientId, doctors, rooms, spe
   }, [search, patients, pid]);
   const patIns = insurances.filter((i) => i.patient_id === pid);
   const activeIns = patIns.filter((i) => i.effective_status === "activo");
+  const specDoctors = sid ? doctors.filter((d) => d.specialties.includes(sid)) : doctors;
   const doctor = doctors.find((d) => d.id === did);
-  const docSpecs = specialties.filter((s) => !doctor || doctor.specialties.includes(s.id));
-  const duration = appt ? Math.round((new Date(appt.ends_at).getTime() - new Date(appt.starts_at).getTime()) / 60000) : 30;
+  const docSched = schedules.filter((s) => s.doctor_id === did);
 
   useEffect(() => { if (care === "seguro" && pid && activeIns.length === 0) setCare("particular"); }, [pid]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!did) { setBusy(null); return; }
+    let alive = true;
+    startLoading(async () => {
+      let b: Busy[] = [];
+      try { b = await getDoctorBusy(did, today, LOOKAHEAD + 1); } catch { b = []; }
+      if (alive) setBusy(b.filter((x) => x.id !== appt?.id));
+    });
+    return () => { alive = false; };
+  }, [did]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const days = useMemo(() => {
+    const out: string[] = [];
+    for (let i = 0; i <= LOOKAHEAD; i++) {
+      const d = addDays(today, i);
+      if (docSched.some((s) => s.weekday === weekdayOf(d))) out.push(d);
+    }
+    return out;
+  }, [did, today]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const busyByDay = useMemo(() => {
+    const m: Record<string, [number, number][]> = {};
+    for (const b of busy ?? []) {
+      const s = zonedParts(new Date(b.starts_at), tz), e = zonedParts(new Date(b.ends_at), tz);
+      const key = isoDate(s.year, s.month, s.day);
+      const endMin = isoDate(e.year, e.month, e.day) === key ? e.hour * 60 + e.minute : 24 * 60;
+      (m[key] ??= []).push([s.hour * 60 + s.minute, endMin]);
+    }
+    return m;
+  }, [busy, tz]);
+
+  const nowP = zonedParts(new Date(), tz);
+  const nowMin = nowP.hour * 60 + nowP.minute;
+  const slotsFor = (d: string) => {
+    const taken = busyByDay[d] ?? [];
+    const out: { t: string; free: boolean }[] = [];
+    for (const s of docSched.filter((x) => x.weekday === weekdayOf(d)).sort((a, b) => a.start_time.localeCompare(b.start_time))) {
+      const a = toMin(s.start_time), b = toMin(s.end_time);
+      for (let t = a; t + duration <= b; t += duration) {
+        if (d === today && t <= nowMin) continue;
+        out.push({ t: hhmm(t), free: !taken.some(([x, y]) => t < y && t + duration > x) });
+      }
+    }
+    return out;
+  };
+  const freeCount = (d: string) => slotsFor(d).filter((s) => s.free).length;
+  const slots = day ? slotsFor(day) : [];
+  const useGrid = !!did && docSched.length > 0 && !manual;
+  const startsAt = day && time ? `${day}T${time}` : "";
+
+  const pickDoctor = (id: string) => { setDid(id); setTime(""); if (!appt) setDay(""); setManual(false); };
+  const pickSpecialty = (id: string) => { setSid(id); if (did && id && !doctors.find((d) => d.id === did)?.specialties.includes(id)) pickDoctor(""); };
+
   return (
-    <form action={action} className="space-y-4">
+    <form action={action} className="space-y-5">
       <Field label="Paciente" required>
         <input placeholder="Buscar por nombre o documento…" value={search} onChange={(e) => setSearch(e.target.value)} className="input mb-2" />
-        <Select name="patient_id" value={pid} onChange={(e) => setPid(e.target.value)} required size={5} className="h-auto">
+        <Select name="patient_id" value={pid} onChange={(e) => setPid(e.target.value)} required size={4} className="h-auto">
           {filtered.map((p) => <option key={p.id} value={p.id}>{p.name} — CI {p.document}</option>)}
         </Select>
         <p className="mt-1 text-xs text-slate-400">¿No está registrado? <Link href="/pacientes/nuevo" className="text-primary-600 hover:underline">Registrar paciente</Link></p>
       </Field>
+
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Profesional" name="doctor_id" required>
-          <Select name="doctor_id" value={did} onChange={(e) => setDid(e.target.value)} required>
-            <option value="">Seleccioná…</option>
-            {doctors.map((d) => <option key={d.id} value={d.id}>{d.full_name}</option>)}
+        <Field label="1. Especialidad" name="specialty_id">
+          <Select name="specialty_id" value={sid} onChange={(e) => pickSpecialty(e.target.value)}>
+            <option value="">Todas las especialidades</option>
+            {specialties.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </Select>
         </Field>
-        <Field label="Especialidad" name="specialty_id">
-          <Select name="specialty_id" key={did} defaultValue={appt?.specialty_id ?? docSpecs[0]?.id ?? ""}>
-            <option value="">—</option>
-            {docSpecs.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        <Field label="2. Profesional" name="doctor_id" required>
+          <Select name="doctor_id" value={did} onChange={(e) => pickDoctor(e.target.value)} required>
+            <option value="">{specDoctors.length ? `Seleccioná (${specDoctors.length} disponibles)…` : "No hay médicos con esta especialidad"}</option>
+            {specDoctors.map((d) => <option key={d.id} value={d.id}>{d.full_name}</option>)}
           </Select>
         </Field>
-        <Field label="Fecha y hora" name="starts_at" required><Input name="starts_at" type="datetime-local" step={300} defaultValue={appt ? toLocalInput(appt.starts_at, tz) : start} required /></Field>
-        <Field label="Duración" name="duration">
-          <Select name="duration" defaultValue={String(duration)}>{[15, 20, 30, 45, 60, 90].map((m) => <option key={m} value={m}>{m} minutos</option>)}</Select>
-        </Field>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[13px] font-semibold text-slate-800">3. Día y horario disponible</p>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-slate-500">Duración</label>
+            <select name="duration" value={duration} onChange={(e) => { setDuration(Number(e.target.value)); setTime(""); }} className="input h-8 w-auto py-0 text-xs">
+              {[15, 20, 30, 45, 60, 90].map((m) => <option key={m} value={m}>{m} min</option>)}
+            </select>
+          </div>
+        </div>
+
+        {!did && <p className="py-6 text-center text-sm text-slate-500">Elegí un profesional para ver sus días y horarios libres.</p>}
+
+        {did && docSched.length === 0 && !manual && (
+          <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800 ring-1 ring-amber-200/60">
+            {doctor?.full_name} no tiene horarios de atención cargados. Configuralos en <Link href={`/medicos/${did}`} className="font-medium underline">su ficha</Link> o <button type="button" onClick={() => setManual(true)} className="font-medium underline">elegí la hora manualmente</button>.
+          </p>
+        )}
+
+        {useGrid && (
+          <>
+            {loading && !busy ? <p className="py-6 text-center text-sm text-slate-500">Buscando horarios libres…</p> : (
+              <>
+                <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2">
+                  {days.map((d) => {
+                    const n = freeCount(d);
+                    const dt = new Date(d + "T12:00:00Z");
+                    return (
+                      <button type="button" key={d} disabled={n === 0} onClick={() => { setDay(d); setTime(""); }}
+                        className={cn("flex w-[68px] shrink-0 flex-col items-center rounded-xl border px-2 py-2 text-center transition",
+                          d === day ? "border-primary-500 bg-primary-600 text-white shadow-soft" : n === 0 ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400" : "border-slate-200 bg-white text-slate-700 hover:border-primary-300")}>
+                        <span className="text-[11px] font-medium uppercase">{d === today ? "Hoy" : WD_SHORT[dt.getUTCDay()]}</span>
+                        <span className="text-lg font-semibold leading-tight">{dt.getUTCDate()}</span>
+                        <span className="text-[10px] opacity-80">{MON_SHORT[dt.getUTCMonth()]}</span>
+                        <span className={cn("mt-1 text-[10px] font-medium", d === day ? "text-primary-100" : n ? "text-emerald-600" : "")}>{n ? `${n} libres` : "Completo"}</span>
+                      </button>
+                    );
+                  })}
+                  {!days.length && <p className="text-sm text-slate-500">Sin días de atención en las próximas 4 semanas.</p>}
+                </div>
+                {day && (
+                  slots.length === 0 ? <p className="mt-2 text-sm text-slate-500">No quedan horarios para este día.</p> : (
+                    <div className="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-6">
+                      {slots.map((s) => (
+                        <button type="button" key={s.t} disabled={!s.free} onClick={() => setTime(s.t)} title={s.free ? "Disponible" : "Ocupado"}
+                          className={cn("rounded-lg border py-2 text-sm font-medium tabular-nums transition",
+                            time === s.t ? "border-primary-600 bg-primary-600 text-white" : s.free ? "border-emerald-200 bg-white text-slate-800 hover:border-emerald-400 hover:bg-emerald-50" : "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 line-through")}>
+                          {s.t}
+                        </button>
+                      ))}
+                    </div>
+                  )
+                )}
+                {day && appt && time && !slots.some((s) => s.t === time) && (
+                  <p className="mt-2 text-xs text-slate-500">Horario actual: {time} (fuera de la grilla). Elegí uno nuevo o dejalo así.</p>
+                )}
+              </>
+            )}
+            <button type="button" onClick={() => setManual(true)} className="mt-3 text-xs font-medium text-slate-500 hover:text-primary-700">Agendar fuera del horario habitual (sobreturno)</button>
+          </>
+        )}
+
+        {did && manual && (
+          <div className="space-y-2">
+            <Input type="datetime-local" step={300} value={startsAt} onChange={(e) => { setDay(e.target.value.slice(0, 10)); setTime(e.target.value.slice(11, 16)); }} required />
+            <p className="text-xs text-slate-500">El sistema igual impide superponer citas del mismo profesional o consultorio.</p>
+            {docSched.length > 0 && <button type="button" onClick={() => setManual(false)} className="text-xs font-medium text-primary-600 hover:underline">Volver a horarios disponibles</button>}
+          </div>
+        )}
+
+        <input type="hidden" name="starts_at" value={startsAt} />
+        {startsAt && did && (
+          <p className="mt-3 flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm text-slate-700 ring-1 ring-slate-200">
+            <CalendarCheck className="h-4 w-4 text-primary-600" />
+            <span><b>{new Intl.DateTimeFormat("es-PY", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(day + "T12:00:00Z"))}</b>, {time} a {hhmm(toMin(time) + duration)} con {doctor?.full_name}</span>
+          </p>
+        )}
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Consultorio" name="room_id">
           <Select name="room_id" key={`r-${did}`} defaultValue={appt?.room_id ?? doctor?.room_id ?? ""}>
             <option value="">—</option>{rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
@@ -404,7 +551,8 @@ function AppointmentForm({ appt, start, doctorId, patientId, doctors, rooms, spe
       <Field label="Motivo de consulta" name="reason"><Input name="reason" defaultValue={appt?.reason ?? ""} /></Field>
       <Field label="Notas internas" name="notes"><Textarea name="notes" rows={2} defaultValue={appt?.notes ?? ""} /></Field>
       {state?.error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-100">{state.error}</p>}
-      <div className="flex justify-end"><SubmitButton>{appt ? "Guardar cambios" : "Agendar cita"}</SubmitButton></div>
+      {!startsAt && did && <p className="text-right text-xs text-slate-500">Elegí día y horario para poder agendar.</p>}
+      <div className="flex justify-end"><SubmitButton disabled={!startsAt}>{appt ? "Guardar cambios" : "Agendar cita"}</SubmitButton></div>
     </form>
   );
 }

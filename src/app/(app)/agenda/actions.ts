@@ -47,3 +47,20 @@ export async function setAppointmentStatus(id: string, status: string, _: Action
   const { error } = await ctx.supabase.from("appointments").update({ status }).eq("id", id).eq("clinic_id", ctx.clinic.id);
   return error ? { error: dbError(error.message) } : { ok: true };
 }
+
+export type Busy = { id: string; starts_at: string; ends_at: string };
+
+export async function getDoctorBusy(doctorId: string, fromISO: string, days: number): Promise<Busy[]> {
+  const ctx = await getCtx();
+  if (!can(ctx.perms, "agenda")) return [];
+  const span = Math.min(Math.max(days, 1), 62);
+  const start = zonedToUtc(`${fromISO}T00:00`, ctx.tz);
+  const end = new Date(start.getTime() + span * 86400000);
+  const { data } = await ctx.supabase.from("appointments")
+    .select("id, starts_at, ends_at")
+    .eq("clinic_id", ctx.clinic.id).eq("doctor_id", doctorId)
+    .not("status", "in", "(cancelada,ausente)")
+    .gte("starts_at", start.toISOString()).lt("starts_at", end.toISOString())
+    .order("starts_at");
+  return data ?? [];
+}
