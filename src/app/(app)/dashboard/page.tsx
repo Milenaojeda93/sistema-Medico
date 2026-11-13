@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { UserPlus, Stethoscope, Clock, CheckCircle2, UserRound, Activity, Banknote, CalendarRange, CalendarX2, ChevronRight, FileWarning, Building2 } from "lucide-react";
+import { UserPlus, Stethoscope, Clock, CheckCircle2, UserRound, Activity, Banknote, CalendarRange, CalendarX2, FileWarning, Building2 } from "lucide-react";
 import { guard } from "@/lib/context";
 import { Badge, Card, Notice, PageHeader, Stat, StatusBadge } from "@/components/ui";
 import { ACTION_LABELS, APPOINTMENT_STATUS, TABLE_LABELS } from "@/lib/constants";
@@ -25,15 +25,6 @@ type Stats = {
   activity: { table_name: string; action: string; created_at: string; user_name: string }[];
 };
 
-function CardLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <Link href={href} className="group relative block rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500">
-      {children}
-      <span className="pointer-events-none absolute bottom-4 right-4 inline-flex items-center gap-0.5 text-xs font-medium text-primary-600 opacity-60 transition group-hover:translate-x-0.5 group-hover:opacity-100">Ver detalle <ChevronRight className="h-3.5 w-3.5" /></span>
-    </Link>
-  );
-}
-
 export default async function Dashboard({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const ctx = await guard("dashboard");
   const sp = await searchParams;
@@ -49,7 +40,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const own = ctx.ownOnly;
   const money = canSee(ctx, "ingresos");
   const href = (tipo: string) => `/dashboard/detalle?${rangeQuery(r, { tipo })}`;
-  const card = (tipo: Detail, el: React.ReactNode) => (canSee(ctx, tipo) ? <CardLink key={tipo} href={href(tipo)}>{el}</CardLink> : <div key={tipo}>{el}</div>);
+  const link = (tipo: Detail) => (canSee(ctx, tipo) ? href(tipo) : undefined);
 
   return (
     <>
@@ -58,25 +49,25 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       <RangePicker r={r} base="/dashboard" />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {card("citas", <Stat label="Citas agendadas" value={n.citas} hint={`${n.atendidas} atendidas`} icon={<CalendarRange className="h-5 w-5" />} tone="sky" />)}
-        {card("consultas", <Stat label="Consultas realizadas" value={n.consultas} icon={<Stethoscope className="h-5 w-5" />} />)}
+        {(<Stat href={link("citas")} label="Citas agendadas" value={n.citas} hint={`${n.atendidas} atendidas`} icon={<CalendarRange className="h-5 w-5" />} tone="sky" />)}
+        {(<Stat href={link("consultas")} label="Consultas realizadas" value={n.consultas} icon={<Stethoscope className="h-5 w-5" />} />)}
         {money
-          ? card("ingresos", <Stat label="Ingresos" value={gs(n.ingresos_particular + n.ingresos_aseguradoras)} hint={`Pacientes ${gs(n.ingresos_particular)} · Aseguradoras ${gs(n.ingresos_aseguradoras)}`} icon={<Banknote className="h-5 w-5" />} tone="green" />)
-          : card("pendientes", <Stat label="Citas pendientes" value={n.pendientes} hint="Por confirmar" icon={<Clock className="h-5 w-5" />} tone="amber" />)}
-        {card("pacientes", <Stat label={own ? "Pacientes nuevos" : "Pacientes nuevos"} value={n.pacientes} hint={`${s.total_patients.toLocaleString("es-PY")} ${own ? "pacientes tuyos" : "pacientes en total"}`} icon={<UserPlus className="h-5 w-5" />} tone="violet" />)}
+          ? (<Stat href={link("ingresos")} label="Ingresos" value={gs(n.ingresos_particular + n.ingresos_aseguradoras)} hint={`Pacientes ${gs(n.ingresos_particular)} · Aseguradoras ${gs(n.ingresos_aseguradoras)}`} icon={<Banknote className="h-5 w-5" />} tone="green" />)
+          : (<Stat href={link("pendientes")} label="Citas pendientes" value={n.pendientes} hint="Por confirmar" icon={<Clock className="h-5 w-5" />} tone="amber" />)}
+        {(<Stat href={link("pacientes")} label={own ? "Pacientes nuevos" : "Pacientes nuevos"} value={n.pacientes} hint={`${s.total_patients.toLocaleString("es-PY")} ${own ? "pacientes tuyos" : "pacientes en total"}`} icon={<UserPlus className="h-5 w-5" />} tone="violet" />)}
       </div>
       <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {money && card("pendientes", <Stat label="Citas pendientes" value={n.pendientes} hint="Por confirmar" icon={<Clock className="h-5 w-5" />} tone="amber" />)}
-        {card("confirmadas", <Stat label="Citas confirmadas" value={n.confirmadas} icon={<CheckCircle2 className="h-5 w-5" />} tone="green" />)}
-        {card("no_concretadas", <Stat label="Canceladas y ausentes" value={n.no_concretadas} icon={<CalendarX2 className="h-5 w-5" />} tone="red" />)}
+        {money && (<Stat href={link("pendientes")} label="Citas pendientes" value={n.pendientes} hint="Por confirmar" icon={<Clock className="h-5 w-5" />} tone="amber" />)}
+        {(<Stat href={link("confirmadas")} label="Citas confirmadas" value={n.confirmadas} icon={<CheckCircle2 className="h-5 w-5" />} tone="green" />)}
+        {(<Stat href={link("no_concretadas")} label="Canceladas y ausentes" value={n.no_concretadas} icon={<CalendarX2 className="h-5 w-5" />} tone="red" />)}
         {money
-          ? card("facturas", <Stat label="Facturas con saldo" value={n.facturas} hint={`Saldo ${gs(n.facturas_saldo)}`} icon={<FileWarning className="h-5 w-5" />} tone="red" />)
-          : card("atendidas", <Stat label="Citas atendidas" value={n.atendidas} icon={<Activity className="h-5 w-5" />} tone="violet" />)}
+          ? (<Stat href={link("facturas")} label="Facturas con saldo" value={n.facturas} hint={`Saldo ${gs(n.facturas_saldo)}`} icon={<FileWarning className="h-5 w-5" />} tone="red" />)
+          : (<Stat href={link("atendidas")} label="Citas atendidas" value={n.atendidas} icon={<Activity className="h-5 w-5" />} tone="violet" />)}
       </div>
       {money && (
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <CardLink href="/facturacion/aseguradoras"><Stat label="Por cobrar a aseguradoras (total)" value={gs(s.insurer_receivable)} hint="Facturado − pagado − rechazado" icon={<Building2 className="h-5 w-5" />} tone="violet" /></CardLink>
-          <CardLink href="/medicos"><Stat label="Médicos disponibles hoy" value={`${s.available_doctors} / ${s.active_doctors}`} hint="Con horario de atención hoy" icon={<UserRound className="h-5 w-5" />} tone="sky" /></CardLink>
+          <Stat href="/facturacion/aseguradoras" linkLabel="Ver liquidaciones" label="Por cobrar a aseguradoras (total)" value={gs(s.insurer_receivable)} hint="Facturado − pagado − rechazado" icon={<Building2 className="h-5 w-5" />} tone="violet" />
+          <Stat href="/medicos" linkLabel="Ver médicos" label="Médicos disponibles hoy" value={`${s.available_doctors} / ${s.active_doctors}`} hint="Con horario de atención hoy" icon={<UserRound className="h-5 w-5" />} tone="sky" />
         </div>
       )}
 

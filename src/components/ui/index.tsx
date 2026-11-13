@@ -123,7 +123,7 @@ export function Select(props: ComponentProps<"select">) {
   return <select id={props.name} {...props} className={cn("input pr-8", props.className)} />;
 }
 
-export function Stat({ label, value, hint, tone = "blue", icon }: { label: string; value: ReactNode; hint?: ReactNode; tone?: "blue" | "sky" | "green" | "amber" | "red" | "violet"; icon?: ReactNode }) {
+export function Stat({ label, value, hint, tone = "blue", icon, href, linkLabel = "Ver detalle" }: { label: string; value: ReactNode; hint?: ReactNode; tone?: "blue" | "sky" | "green" | "amber" | "red" | "violet"; icon?: ReactNode; href?: string; linkLabel?: string }) {
   const t = {
     blue: ["from-primary-500 to-primary-600", "bg-primary-500"],
     sky: ["from-sky-400 to-sky-600", "bg-sky-500"],
@@ -132,8 +132,8 @@ export function Stat({ label, value, hint, tone = "blue", icon }: { label: strin
     red: ["from-rose-400 to-rose-600", "bg-rose-500"],
     violet: ["from-violet-400 to-violet-600", "bg-violet-500"],
   }[tone];
-  return (
-    <div className="card group relative overflow-hidden p-5 transition-shadow hover:shadow-lift">
+  const body = (
+    <div className={cn("card group relative flex h-full flex-col overflow-hidden p-5 transition-shadow hover:shadow-lift", href && "hover:ring-1 hover:ring-primary-200")}>
       <span className={cn("absolute inset-x-0 top-0 h-[3px] opacity-80", t[1])} />
       <div className="flex items-start justify-between gap-3">
         <p className="text-[13px] font-medium leading-snug text-slate-500">{label}</p>
@@ -142,9 +142,15 @@ export function Stat({ label, value, hint, tone = "blue", icon }: { label: strin
         )}
       </div>
       <p className="tabular mt-2 text-2xl font-semibold tracking-tight text-slate-950">{value}</p>
-      {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+      {hint && <p className="mt-1 text-xs leading-relaxed text-slate-500">{hint}</p>}
+      {href && (
+        <><div className="min-h-3 flex-1" /><div className="flex justify-end border-t border-slate-100 pt-3">
+          <span className="inline-flex items-center gap-0.5 text-xs font-medium text-primary-600 transition group-hover:translate-x-0.5">{linkLabel} <span aria-hidden="true">›</span></span>
+        </div></>
+      )}
     </div>
   );
+  return href ? <Link href={href} className="block h-full rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500">{body}</Link> : body;
 }
 
 export function Tabs({ tabs, active }: { tabs: { key: string; label: string; href: string; disabled?: boolean; badge?: string }[]; active: string }) {
