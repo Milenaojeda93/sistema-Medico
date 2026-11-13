@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Check, Search, UserPlus, X } from "lucide-react";
 import { cn, gs } from "@/lib/utils";
+import { SearchSelect } from "@/components/ui/pickers";
 
 export type Pat = { id: string; name: string; document: string; phone?: string | null };
 export type Doc = { id: string; full_name: string; specialties: string[]; fee: number | null };
@@ -116,6 +117,9 @@ export function PatientPicker({ patients, value, onChange }: { patients: Pat[]; 
 }
 
 export function SpecialtyChips({ specialties, value, onChange }: { specialties: { id: string; name: string }[]; value: string; onChange: (id: string) => void }) {
+  if (specialties.length > 10) {
+    return <SearchSelect name="specialty_id" value={value} onChange={onChange} placeholder="Todas las especialidades · buscá una…" options={specialties.map((s) => ({ value: s.id, label: s.name }))} />;
+  }
   return (
     <div className="flex flex-wrap gap-1.5">
       <input type="hidden" name="specialty_id" value={value} />
@@ -130,57 +134,129 @@ export function SpecialtyChips({ specialties, value, onChange }: { specialties: 
   );
 }
 
+const CARD_LIMIT = 6; // hasta este número se muestran tarjetas; con más, buscador + lista compacta
+
 export function DoctorCards({ doctors, specialties, value, onChange, priceFor }: {
   doctors: Doc[]; specialties: { id: string; name: string }[]; value: string; onChange: (id: string) => void; priceFor: (d: Doc) => number | null;
 }) {
   const [q, setQ] = useState("");
+  const [active, setActive] = useState(0);
+  const [changing, setChanging] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
   const name = (id: string) => specialties.find((s) => s.id === id)?.name;
+  const specs = (d: Doc) => d.specialties.map(name).filter(Boolean).join(" · ");
   const words = norm(q.trim()).split(/\s+/).filter(Boolean);
-  const list = words.length
-    ? doctors.filter((d) => { const t = norm(`${d.full_name} ${d.specialties.map(name).join(" ")}`); return words.every((w) => t.includes(w)); })
-    : doctors;
+  const list = words.length ? doctors.filter((d) => { const t = norm(`${d.full_name} ${specs(d)}`); return words.every((w) => t.includes(w)); }) : doctors;
+  const many = doctors.length > CARD_LIMIT;
+  const selected = doctors.find((d) => d.id === value);
+  const pick = (id: string) => { onChange(id); setQ(""); setChanging(false); setActive(0); };
+
+  const Price = ({ d, compact }: { d: Doc; compact?: boolean }) => {
+    const price = priceFor(d);
+    if (price == null) return <span className="shrink-0 text-[11px] text-slate-400">Sin costo</span>;
+    return compact
+      ? <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-800">{gs(price)}</span>
+      : <span className="shrink-0 text-right"><span className="block text-[10px] uppercase tracking-wide text-slate-400">Particular</span><span className="block text-sm font-semibold tabular-nums text-slate-800">{gs(price)}</span></span>;
+  };
+
+  const hidden = <input name="doctor_id" value={value} required onChange={() => {}} tabIndex={-1} aria-hidden="true" className="sr-only" onInvalid={() => { setChanging(true); input.current?.focus(); }} />;
+  if (doctors.length === 0) return <div>{hidden}<p className="rounded-xl bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">No hay médicos con esta especialidad.</p></div>;
+
+  // Muchos médicos y uno ya elegido: se muestra solo el elegido.
+  if (many && selected && !changing) {
+    return (
+      <div>
+        {hidden}
+        <div className="flex items-center gap-3 rounded-2xl border border-primary-200 bg-primary-50/40 px-4 py-3">
+          <Avatar id={selected.id} text={docInitials(selected.full_name)} size="lg" />
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold leading-snug text-slate-900">{selected.full_name}</p>
+            <p className="truncate text-xs text-slate-500">{specs(selected) || "Sin especialidad"}</p>
+          </div>
+          <Price d={selected} />
+          <button type="button" onClick={() => { setChanging(true); setTimeout(() => input.current?.focus(), 0); }} className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-primary-700 hover:bg-white">Cambiar</button>
+        </div>
+      </div>
+    );
+  }
+
+  const search = (
+    <div className="relative mb-2">
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      <input ref={input} value={q} autoComplete="off" placeholder="Buscá el profesional por nombre o especialidad…"
+        onChange={(e) => { setQ(e.target.value); setActive(0); }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(a + 1, list.length - 1)); }
+          else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(a - 1, 0)); }
+          else if (e.key === "Enter") { e.preventDefault(); const d = many ? list[active] : list.length === 1 ? list[0] : null; if (d) pick(d.id); }
+          else if (e.key === "Escape" && selected) setChanging(false);
+        }}
+        className="input h-10 pl-9 pr-9 text-sm" />
+      {q && <button type="button" aria-label="Limpiar búsqueda" onClick={() => setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>}
+    </div>
+  );
+  const empty = list.length === 0 && <p className="rounded-xl bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">Ningún profesional coincide con «{q.trim()}».</p>;
+
+  if (many) {
+    const shown = list.slice(0, 50);
+    return (
+      <div>
+        {hidden}
+        {search}
+        {empty}
+        {list.length > 0 && (
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <ul className="max-h-[264px] divide-y divide-slate-100 overflow-auto">
+              {shown.map((d, i) => (
+                <li key={d.id}>
+                  <button type="button" onClick={() => pick(d.id)} onMouseEnter={() => setActive(i)}
+                    className={cn("flex w-full items-center gap-3 px-3 py-2 text-left", i === active ? "bg-primary-50" : "hover:bg-slate-50", d.id === value && "bg-primary-50/60")}>
+                    <Avatar id={d.id} text={docInitials(d.full_name)} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-slate-800">{d.full_name}</span>
+                      <span className="block truncate text-xs text-slate-500">{specs(d) || "Sin especialidad"}</span>
+                    </span>
+                    <Price d={d} compact />
+                    {d.id === value && <Check className="h-4 w-4 shrink-0 text-primary-600" />}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <p className="border-t border-slate-100 bg-slate-50/70 px-3 py-1.5 text-[11px] text-slate-500">
+              {list.length > shown.length ? `Mostrando ${shown.length} de ${list.length}. Escribí para afinar la búsqueda.` : `${list.length} profesional${list.length === 1 ? "" : "es"}`}
+              {selected && <> · <button type="button" onClick={() => setChanging(false)} className="font-medium text-primary-600 hover:underline">Mantener {selected.full_name}</button></>}
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Pocos médicos: tarjetas.
+  const cards = value && !list.some((d) => d.id === value) ? [...doctors.filter((d) => d.id === value), ...list] : list;
   return (
     <div>
-      <input name="doctor_id" value={value} required onChange={() => {}} tabIndex={-1} aria-hidden="true" className="sr-only" />
-      {doctors.length > 1 && (
-        <div className="relative mb-2">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscá el profesional por nombre o especialidad…" autoComplete="off"
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (list.length === 1) { onChange(list[0].id); setQ(""); } } }}
-            className="input h-10 pl-9 pr-9 text-sm" />
-          {q && <button type="button" aria-label="Limpiar búsqueda" onClick={() => setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>}
-        </div>
-      )}
-      {doctors.length > 0 && list.length === 0 && (
-        <p className="rounded-xl bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">Ningún profesional coincide con «{q.trim()}».</p>
-      )}
-      {doctors.length === 0 ? (
-        <p className="rounded-xl bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">No hay médicos con esta especialidad.</p>
-      ) : (
-        <div className="grid max-h-[232px] gap-2 overflow-auto p-0.5 sm:grid-cols-2">
-          {(value && !list.some((d) => d.id === value) ? [...doctors.filter((d) => d.id === value), ...list] : list).map((d) => {
-            const price = priceFor(d);
-            const on = d.id === value;
-            return (
-              <button type="button" key={d.id} onClick={() => { onChange(d.id); setQ(""); }}
-                className={cn("flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition",
-                  on ? "border-primary-500 bg-primary-50/60 ring-1 ring-primary-500" : "border-slate-200 bg-white hover:border-primary-300")}>
-                <Avatar id={d.id} text={docInitials(d.full_name)} />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold leading-snug text-slate-800">{d.full_name}</span>
-                  <span className="block truncate text-xs text-slate-500" title={d.specialties.map(name).filter(Boolean).join(" · ")}>{d.specialties.map(name).filter(Boolean).join(" · ") || "Sin especialidad"}</span>
-                </span>
-                <span className="shrink-0 text-right">
-                  {price != null
-                    ? <><span className="block text-[10px] uppercase tracking-wide text-slate-400">Particular</span><span className="block text-sm font-semibold tabular-nums text-slate-800">{gs(price)}</span></>
-                    : <span className="text-[11px] text-slate-400">Sin costo</span>}
-                </span>
-                {on && <Check className="h-4 w-4 shrink-0 text-primary-600" />}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {hidden}
+      {doctors.length > 1 && search}
+      {empty}
+      <div className="grid gap-2 p-0.5 sm:grid-cols-2">
+        {cards.map((d) => {
+          const on = d.id === value;
+          return (
+            <button type="button" key={d.id} onClick={() => pick(d.id)}
+              className={cn("flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition",
+                on ? "border-primary-500 bg-primary-50/60 ring-1 ring-primary-500" : "border-slate-200 bg-white hover:border-primary-300")}>
+              <Avatar id={d.id} text={docInitials(d.full_name)} />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold leading-snug text-slate-800">{d.full_name}</span>
+                <span className="block truncate text-xs text-slate-500" title={specs(d)}>{specs(d) || "Sin especialidad"}</span>
+              </span>
+              <Price d={d} />
+              {on && <Check className="h-4 w-4 shrink-0 text-primary-600" />}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
