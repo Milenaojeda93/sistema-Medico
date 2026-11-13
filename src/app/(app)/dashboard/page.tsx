@@ -1,10 +1,13 @@
 import Link from "next/link";
-import { Users, UserPlus, Stethoscope, Clock, CheckCircle2, UserRound, Activity, Banknote, CalendarRange, FileWarning, Building2 } from "lucide-react";
+import { UserPlus, Stethoscope, Clock, CheckCircle2, UserRound, Activity, Banknote, CalendarRange, CalendarX2, ChevronRight, FileWarning, Building2 } from "lucide-react";
 import { guard } from "@/lib/context";
 import { Badge, Card, Notice, PageHeader, Stat, StatusBadge } from "@/components/ui";
 import { ACTION_LABELS, APPOINTMENT_STATUS, TABLE_LABELS } from "@/lib/constants";
 import { fmtDateTime, fmtTime, gs } from "@/lib/utils";
 import { BySpecialty, CareType, ConsultationsByDay, IncomeByMonth, NewPatients } from "./charts";
+import { canSee, cardCounts, rangeCharts, type Detail } from "./data";
+import { parseRange, rangeQuery } from "./range";
+import { RangePicker } from "./range-picker";
 
 export const metadata = { title: "Dashboard" };
 
@@ -22,45 +25,67 @@ type Stats = {
   activity: { table_name: string; action: string; created_at: string; user_name: string }[];
 };
 
-export default async function Dashboard() {
+function CardLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link href={href} className="group relative block rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500">
+      {children}
+      <span className="pointer-events-none absolute bottom-4 right-4 inline-flex items-center gap-0.5 text-xs font-medium text-primary-600 opacity-60 transition group-hover:translate-x-0.5 group-hover:opacity-100">Ver detalle <ChevronRight className="h-3.5 w-3.5" /></span>
+    </Link>
+  );
+}
+
+export default async function Dashboard({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const ctx = await guard("dashboard");
-  const { data, error } = await ctx.supabase.rpc("dashboard_stats", { p_clinic: ctx.clinic.id });
+  const sp = await searchParams;
+  const r = parseRange(sp, ctx.tz);
+  const [{ data, error }, n, ch] = await Promise.all([
+    ctx.supabase.rpc("dashboard_stats", { p_clinic: ctx.clinic.id }),
+    cardCounts(ctx, r),
+    rangeCharts(ctx, r),
+  ]);
   if (error) throw new Error(error.message);
   const s = data as Stats;
   const first = (ctx.profile?.full_name ?? "").split(" ")[0];
   const own = ctx.ownOnly;
+  const money = canSee(ctx, "ingresos");
+  const href = (tipo: string) => `/dashboard/detalle?${rangeQuery(r, { tipo })}`;
+  const card = (tipo: Detail, el: React.ReactNode) => (canSee(ctx, tipo) ? <CardLink key={tipo} href={href(tipo)}>{el}</CardLink> : <div key={tipo}>{el}</div>);
 
   return (
     <>
       <PageHeader title={`Hola${first ? ", " + first : ""}`} description={own ? "Tu resumen: tus pacientes, tu agenda y tus consultas" : `Resumen de ${ctx.clinic.name}`} />
       {own && !ctx.myDoctorIds.length && <div className="mb-4"><Notice tone="amber">Tu usuario todavía no está vinculado a una ficha de profesional. Pedile al administrador que lo vincule en <b>Médicos y profesionales</b>.</Notice></div>}
+      <RangePicker r={r} base="/dashboard" />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat label={own ? "Mis pacientes" : "Total de pacientes"} value={s.total_patients.toLocaleString("es-PY")} hint={`${s.new_patients_month} nuevos este mes`} icon={<Users className="h-5 w-5" />} />
-        <Stat label="Consultas del día" value={s.consultations_today} hint={`${s.appointments_today} citas agendadas hoy`} icon={<Stethoscope className="h-5 w-5" />} tone="sky" />
-        {own ? <>
-          <Stat label="Citas pendientes" value={s.pending_appointments} hint="Por confirmar" icon={<Clock className="h-5 w-5" />} tone="amber" />
-          <Stat label="Consultas del mes" value={s.consultations_month} icon={<Activity className="h-5 w-5" />} tone="violet" />
-        </> : <>
-          <Stat label="Ingresos del día" value={gs(s.income_today)} hint={`Mes: ${gs(s.income_month)}`} icon={<Banknote className="h-5 w-5" />} tone="green" />
-          <Stat label="Cuentas por cobrar a aseguradoras" value={gs(s.insurer_receivable)} hint="Facturado − pagado − rechazado" icon={<Building2 className="h-5 w-5" />} tone="violet" />
-        </>}
+        {card("citas", <Stat label="Citas agendadas" value={n.citas} hint={`${n.atendidas} atendidas`} icon={<CalendarRange className="h-5 w-5" />} tone="sky" />)}
+        {card("consultas", <Stat label="Consultas realizadas" value={n.consultas} icon={<Stethoscope className="h-5 w-5" />} />)}
+        {money
+          ? card("ingresos", <Stat label="Ingresos" value={gs(n.ingresos_particular + n.ingresos_aseguradoras)} hint={`Pacientes ${gs(n.ingresos_particular)} · Aseguradoras ${gs(n.ingresos_aseguradoras)}`} icon={<Banknote className="h-5 w-5" />} tone="green" />)
+          : card("pendientes", <Stat label="Citas pendientes" value={n.pendientes} hint="Por confirmar" icon={<Clock className="h-5 w-5" />} tone="amber" />)}
+        {card("pacientes", <Stat label={own ? "Pacientes nuevos" : "Pacientes nuevos"} value={n.pacientes} hint={`${s.total_patients.toLocaleString("es-PY")} ${own ? "pacientes tuyos" : "pacientes en total"}`} icon={<UserPlus className="h-5 w-5" />} tone="violet" />)}
       </div>
-      {!own && <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-        <Stat label="Pacientes nuevos (mes)" value={s.new_patients_month} icon={<UserPlus className="h-5 w-5" />} />
-        <Stat label="Citas pendientes" value={s.pending_appointments} icon={<Clock className="h-5 w-5" />} tone="amber" />
-        <Stat label="Citas confirmadas" value={s.confirmed_appointments} icon={<CheckCircle2 className="h-5 w-5" />} tone="green" />
-        <Stat label="Médicos disponibles hoy" value={`${s.available_doctors} / ${s.active_doctors}`} icon={<UserRound className="h-5 w-5" />} tone="sky" />
-        <Stat label="Consultas realizadas (mes)" value={s.consultations_month} icon={<Activity className="h-5 w-5" />} />
-        <Stat label="Facturas pendientes" value={s.pending_invoices} hint={gs(s.pending_invoices_amount)} icon={<FileWarning className="h-5 w-5" />} tone="red" />
-      </div>}
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {money && card("pendientes", <Stat label="Citas pendientes" value={n.pendientes} hint="Por confirmar" icon={<Clock className="h-5 w-5" />} tone="amber" />)}
+        {card("confirmadas", <Stat label="Citas confirmadas" value={n.confirmadas} icon={<CheckCircle2 className="h-5 w-5" />} tone="green" />)}
+        {card("no_concretadas", <Stat label="Canceladas y ausentes" value={n.no_concretadas} icon={<CalendarX2 className="h-5 w-5" />} tone="red" />)}
+        {money
+          ? card("facturas", <Stat label="Facturas con saldo" value={n.facturas} hint={`Saldo ${gs(n.facturas_saldo)}`} icon={<FileWarning className="h-5 w-5" />} tone="red" />)
+          : card("atendidas", <Stat label="Citas atendidas" value={n.atendidas} icon={<Activity className="h-5 w-5" />} tone="violet" />)}
+      </div>
+      {money && (
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <CardLink href="/facturacion/aseguradoras"><Stat label="Por cobrar a aseguradoras (total)" value={gs(s.insurer_receivable)} hint="Facturado − pagado − rechazado" icon={<Building2 className="h-5 w-5" />} tone="violet" /></CardLink>
+          <CardLink href="/medicos"><Stat label="Médicos disponibles hoy" value={`${s.available_doctors} / ${s.active_doctors}`} hint="Con horario de atención hoy" icon={<UserRound className="h-5 w-5" />} tone="sky" /></CardLink>
+        </div>
+      )}
 
       <div className="mt-6 grid gap-6 xl:grid-cols-3">
-        <Card title="Consultas por día · últimos 30 días" className="xl:col-span-2"><ConsultationsByDay data={s.consultations_by_day} /></Card>
-        <Card title="Consultas por especialidad · 90 días"><BySpecialty data={s.consultations_by_specialty} /></Card>
-        {!own && <Card title="Ingresos mensuales" className="xl:col-span-2"><IncomeByMonth data={s.income_by_month} /></Card>}
-        <Card title="Atención particular vs. por seguro · 90 días"><CareType data={s.care_type_distribution} /></Card>
-        <Card title="Pacientes nuevos por mes"><NewPatients data={s.new_patients_by_month} /></Card>
+        <Card title={`Consultas por ${ch.byMonth ? "mes" : "día"} · ${r.label}`} className="xl:col-span-2"><ConsultationsByDay data={ch.consultations} byMonth={ch.byMonth} /></Card>
+        <Card title="Consultas por especialidad · período"><BySpecialty data={ch.bySpecialty} /></Card>
+        {!own && <Card title="Ingresos mensuales · últimos 6 meses" className="xl:col-span-2"><IncomeByMonth data={s.income_by_month} /></Card>}
+        <Card title="Particular vs. por seguro · período"><CareType data={ch.careType} /></Card>
+        <Card title="Pacientes nuevos por mes · últimos 6 meses"><NewPatients data={s.new_patients_by_month} /></Card>
 
         <Card title="Próximas citas" padded={false} actions={<Link href="/agenda" className="text-xs font-medium text-primary-600 hover:underline">Ver agenda</Link>}>
           {s.upcoming.length === 0 && <p className="p-5 text-sm text-slate-500">No hay citas próximas.</p>}

@@ -15,15 +15,31 @@ function Empty() {
   return <div className="flex h-full items-center justify-center text-sm text-slate-400">Sin datos en el período</div>;
 }
 
-export function ConsultationsByDay({ data }: { data: { date: string; total: number }[] }) {
-  const rows = data.map((d) => ({ ...d, label: d.date.slice(8, 10) + "/" + d.date.slice(5, 7) }));
+export function ConsultationsByDay({ data, byMonth = false }: { data: { date: string; total: number }[]; byMonth?: boolean }) {
+  const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+  const rows = data.map((d) => ({ ...d, label: byMonth ? `${MONTHS[Number(d.date.slice(5, 7)) - 1]} ${d.date.slice(2, 4)}` : d.date.slice(8, 10) + "/" + d.date.slice(5, 7) }));
+  const interval = Math.max(0, Math.ceil(rows.length / 10) - 1);
+  const tip = <Tooltip {...tooltipStyle} formatter={(v) => [v as number, "Consultas"]} labelFormatter={(l) => (byMonth ? String(l) : `Día ${l}`)} cursor={{ fill: "#f8fafc", stroke: "#cbd5e1" }} />;
+  if (rows.length <= 14) {
+    return (
+      <ResponsiveContainer width="100%" height={240}>
+        <BarChart data={rows} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+          <CartesianGrid vertical={false} stroke="#f1f5f9" />
+          <XAxis dataKey="label" tick={AXIS} tickLine={false} axisLine={{ stroke: "#e2e8f0" }} />
+          <YAxis allowDecimals={false} tick={AXIS} tickLine={false} axisLine={false} />
+          {tip}
+          <Bar dataKey="total" fill={BLUE} radius={[4, 4, 0, 0]} maxBarSize={48} />
+        </BarChart>
+      </ResponsiveContainer>
+    );
+  }
   return (
     <ResponsiveContainer width="100%" height={240}>
       <LineChart data={rows} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
         <CartesianGrid vertical={false} stroke="#f1f5f9" />
-        <XAxis dataKey="label" tick={AXIS} tickLine={false} axisLine={{ stroke: "#e2e8f0" }} interval={4} />
+        <XAxis dataKey="label" tick={AXIS} tickLine={false} axisLine={{ stroke: "#e2e8f0" }} interval={interval} />
         <YAxis allowDecimals={false} tick={AXIS} tickLine={false} axisLine={false} />
-        <Tooltip {...tooltipStyle} formatter={(v) => [v as number, "Consultas"]} labelFormatter={(l) => `Día ${l}`} cursor={{ stroke: "#cbd5e1" }} />
+        {tip}
         <Line type="monotone" dataKey="total" stroke={BLUE} strokeWidth={2} dot={false} activeDot={{ r: 5, strokeWidth: 2, stroke: "#fff" }} />
       </LineChart>
     </ResponsiveContainer>
