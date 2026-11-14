@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { Check, FlaskConical, Loader2, Plus, Printer, Send, X } from "lucide-react";
+import { useEffect, useState, useTransition } from "react";
+import { Building2, Check, FlaskConical, Loader2, MapPin, Plus, Printer, Send, X } from "lucide-react";
 import { btnClass } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { createLabOrder, type LabItem } from "./actions";
@@ -20,6 +20,12 @@ export function LabOrderBuilder({ patientId, doctorId, consultationId }: { patie
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [location, setLocationState] = useState<"interno" | "externo">("interno");
+  const [externalLab, setExternalLab] = useState("");
+  const [doneExt, setDoneExt] = useState(false);
+  // Recordamos la última elección del médico (si su clínica no tiene laboratorio, no lo elige cada vez).
+  useEffect(() => { try { const v = localStorage.getItem("medvia.lab.location"); if (v === "externo" || v === "interno") setLocationState(v); } catch {} }, []);
+  const setLocation = (v: "interno" | "externo") => { setLocationState(v); try { localStorage.setItem("medvia.lab.location", v); } catch {} };
 
   const has = (s: string) => items.some((i) => i.study.toLowerCase() === s.toLowerCase());
   const toggle = (study: string, category: LabItem["category"]) =>
@@ -33,9 +39,9 @@ export function LabOrderBuilder({ patientId, doctorId, consultationId }: { patie
   const submit = () => {
     setError(null);
     start(async () => {
-      const res = await createLabOrder({ patientId, doctorId, consultationId, priority, notes, items });
+      const res = await createLabOrder({ patientId, doctorId, consultationId, priority, notes, items, location, externalLab });
       if (res.error) { setError(res.error); return; }
-      setDone(res.id ?? null); setOpen(false); reset(); router.refresh();
+      setDone(res.id ?? null); setDoneExt(location === "externo"); setOpen(false); reset(); router.refresh();
     });
   };
 
@@ -45,7 +51,7 @@ export function LabOrderBuilder({ patientId, doctorId, consultationId }: { patie
         <button type="button" onClick={() => { setOpen(true); setDone(null); }} className={btnClass("primary")}><FlaskConical className="h-4 w-4" /> Pedir estudios</button>
         {done && (
           <span className="inline-flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800 ring-1 ring-emerald-200/70">
-            Pedido enviado a laboratorio.
+            {doneExt ? "Orden lista para entregar al paciente." : "Pedido enviado al laboratorio de la clínica."}
             <Link href={`/laboratorio/${done}?imprimir=1`} target="_blank" className="inline-flex items-center gap-1 font-semibold underline"><Printer className="h-3.5 w-3.5" /> Imprimir orden</Link>
           </span>
         )}
@@ -55,6 +61,25 @@ export function LabOrderBuilder({ patientId, doctorId, consultationId }: { patie
 
   return (
     <div className="space-y-4">
+      <div>
+        <p className="label">¿Dónde se hace el estudio?</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {([
+            { v: "interno", icon: <Building2 className="h-5 w-5" />, t: "En el laboratorio de la clínica", d: "Le llega al laboratorio, que carga los resultados." },
+            { v: "externo", icon: <MapPin className="h-5 w-5" />, t: "Afuera, en otro laboratorio", d: "Se imprime la orden. Cuando el paciente vuelve, adjuntás los resultados." },
+          ] as const).map((o) => (
+            <button type="button" key={o.v} onClick={() => setLocation(o.v)}
+              className={cn("flex items-start gap-3 rounded-xl border p-3 text-left transition",
+                location === o.v ? "border-primary-500 bg-primary-50/60 ring-1 ring-primary-500" : "border-slate-200 bg-white hover:border-primary-300")}>
+              <span className={cn("mt-0.5", location === o.v ? "text-primary-600" : "text-slate-400")}>{o.icon}</span>
+              <span><span className="block text-sm font-semibold text-slate-800">{o.t}</span><span className="block text-xs text-slate-500">{o.d}</span></span>
+            </button>
+          ))}
+        </div>
+        {location === "externo" && (
+          <input className="input mt-2" value={externalLab} onChange={(e) => setExternalLab(e.target.value)} placeholder="Laboratorio sugerido (opcional). Ej.: Laboratorio Díaz Gill" />
+        )}
+      </div>
       {STUDY_GROUPS.map((g) => (
         <div key={g.label}>
           <p className="label">{g.label}</p>
@@ -111,7 +136,7 @@ export function LabOrderBuilder({ patientId, doctorId, consultationId }: { patie
             ))}
           </div>
         </div>
-        <label><span className="label">Datos clínicos / indicaciones para el laboratorio (opcional)</span>
+        <label><span className="label">Datos clínicos / indicaciones (opcional)</span>
           <input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Ej.: paciente en ayunas, sospecha de anemia" />
         </label>
       </div>
@@ -120,7 +145,7 @@ export function LabOrderBuilder({ patientId, doctorId, consultationId }: { patie
       <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-4">
         <button type="button" onClick={() => { setOpen(false); reset(); }} className={btnClass("ghost")}>Cancelar</button>
         <button type="button" onClick={submit} disabled={!items.length || pending} className={btnClass("primary")}>
-          {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Enviar pedido{items.length ? ` (${items.length})` : ""}
+          {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} {location === "externo" ? "Generar orden" : "Enviar al laboratorio"}{items.length ? ` (${items.length})` : ""}
         </button>
       </div>
     </div>

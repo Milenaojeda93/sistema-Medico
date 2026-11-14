@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation";
-import { CheckCircle2, FileText, Paperclip } from "lucide-react";
+import { CheckCircle2, FileText, MapPin, Paperclip } from "lucide-react";
 import { guard, can } from "@/lib/context";
-import { Badge, Card, Field, Input, Notice, PageHeader, StatusBadge } from "@/components/ui";
+import { Badge, Card, Field, Input, Notice, PageHeader } from "@/components/ui";
 import { ActionForm, Modal, PrintButton, SubmitButton } from "@/components/ui/client";
 import { age, fmtDate, fmtDateTime } from "@/lib/utils";
 import { AutoPrint } from "../../recetas/auto-print";
 import { saveLabResult, voidLabOrder } from "../actions";
-import { LAB_STATUS } from "../constants";
+import { labStatus } from "../constants";
 import { signedUrls, type LabOrderRow } from "../order-card";
 
 export const metadata = { title: "Pedido de estudios" };
@@ -23,7 +23,10 @@ export default async function LabOrderPage({ params, searchParams }: { params: P
   const d = o.doctors as { full_name: string; license_number: string };
   const items = [...(o.lab_order_items as LabOrderRow["lab_order_items"])].sort((a, b) => a.position - b.position);
   const urls = await signedUrls(ctx, [o as unknown as LabOrderRow]);
-  const editable = can(ctx.perms, "laboratorio", "edit") && o.status !== "anulado";
+  const ext = o.location === "externo";
+  const ownsOrder = !ctx.ownOnly || ctx.myDoctorIds.includes(o.doctor_id);
+  const editable = o.status !== "anulado" && (can(ctx.perms, "laboratorio", "edit") || (ext && can(ctx.perms, "historias", "edit") && ownsOrder));
+  const st = labStatus(o);
   const c = ctx.clinic;
 
   return (
@@ -32,27 +35,30 @@ export default async function LabOrderPage({ params, searchParams }: { params: P
       <div className="no-print">
         <PageHeader
           back={o.consultation_id && can(ctx.perms, "historias") ? { href: `/consultas/${o.consultation_id}#estudios`, label: "Volver a la consulta" } : { href: "/laboratorio", label: "Laboratorio" }}
-          title={<span className="flex flex-wrap items-center gap-3">Pedido {o.number} <StatusBadge map={LAB_STATUS} value={o.status} />{o.priority === "urgente" && <Badge tone="red">Urgente</Badge>}</span>}
+          title={<span className="flex flex-wrap items-center gap-3">Pedido {o.number} <Badge tone={st.tone}>{st.label}</Badge>{o.priority === "urgente" && <Badge tone="red">Urgente</Badge>}</span>}
           description={`${p.first_name} ${p.last_name} · CI ${p.document} · Solicitado por ${d.full_name} el ${fmtDateTime(o.ordered_at, ctx.tz)}`}
           actions={<>
             <PrintButton label="Imprimir orden" />
             {editable && o.status !== "completado" && (
-              <Modal trigger="Anular" title={`Anular pedido ${o.number}`} triggerVariant="ghost" size="sm">
+              <Modal trigger={ext ? "No se realizó" : "Anular"} title={ext ? `Cerrar pedido ${o.number} sin resultados` : `Anular pedido ${o.number}`} triggerVariant="ghost" size="sm">
                 <ActionForm action={voidLabOrder.bind(null, id)} className="space-y-4">
-                  <Field label="Motivo" name="reason" required><Input name="reason" required /></Field>
-                  <div className="flex justify-end"><SubmitButton variant="danger">Anular pedido</SubmitButton></div>
+                  <Field label="Motivo" name="reason" required><Input name="reason" required defaultValue={ext ? "El paciente no se realizó el estudio" : ""} /></Field>
+                  <div className="flex justify-end"><SubmitButton variant="danger">{ext ? "Cerrar sin resultados" : "Anular pedido"}</SubmitButton></div>
                 </ActionForm>
               </Modal>
             )}
           </>}
         />
-        {o.status === "anulado" && <div className="mb-4"><Notice tone="red"><b>Pedido anulado.</b> Motivo: {o.void_reason}</Notice></div>}
+        {o.status === "anulado" && <div className="mb-4"><Notice tone="red"><b>{ext ? "Cerrado sin resultados." : "Pedido anulado."}</b> Motivo: {o.void_reason}</Notice></div>}
+        {ext && !["anulado", "completado"].includes(o.status) && (
+          <div className="mb-4"><Notice tone="blue"><span className="inline-flex items-center gap-1 font-semibold"><MapPin className="h-4 w-4" /> Estudio externo{o.external_lab ? ` · ${o.external_lab}` : ""}.</span> El paciente se lo hace afuera. Cuando traiga los resultados, escribilos o adjuntá el PDF o la foto en cada estudio. Si no se lo hizo, usá «No se realizó».</Notice></div>
+        )}
         {o.clinical_notes && <div className="mb-4"><Notice tone="blue"><b>Datos clínicos:</b> {o.clinical_notes}</Notice></div>}
 
         <div className="space-y-4">
           {items.map((i) => (
-            <Card key={i.id} title={<span className="flex items-center gap-2">{i.status === "completado" ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />}{i.study}</span>}
-              actions={i.status === "completado" ? <Badge tone="green">Completado {i.result_at ? fmtDateTime(i.result_at, ctx.tz) : ""}</Badge> : <Badge tone="amber">Pendiente</Badge>}>
+            <Card key={i.id} title={<span className="flex items-center gap-2">{i.status === "completado" ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <span className={`h-2.5 w-2.5 rounded-full ${ext ? "bg-slate-300" : "bg-amber-400"}`} />}{i.study}</span>}
+              actions={i.status === "completado" ? <Badge tone="green">Completado {i.result_at ? fmtDateTime(i.result_at, ctx.tz) : ""}</Badge> : (ext ? <Badge>Esperando resultado</Badge> : <Badge tone="amber">Pendiente</Badge>)}>
               {i.result_file_path && urls[i.result_file_path] && (
                 <a href={urls[i.result_file_path]} target="_blank" rel="noreferrer" className="mb-3 inline-flex items-center gap-1.5 rounded-lg bg-primary-50 px-3 py-1.5 text-sm font-medium text-primary-700 ring-1 ring-primary-100 hover:bg-primary-100">
                   {i.result_file_name?.toLowerCase().endsWith(".pdf") ? <FileText className="h-4 w-4" /> : <Paperclip className="h-4 w-4" />} {i.result_file_name ?? "Archivo adjunto"}

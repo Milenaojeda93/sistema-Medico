@@ -268,7 +268,7 @@ async function StudiesTab({ patientId, ctx }: { patientId: string; ctx: C }) {
   return (
     <Card title="Estudios y resultados">
       {!orders.length ? <EmptyState title="Sin estudios" description="Los estudios se piden desde la consulta del paciente." /> : (
-        <div className="space-y-3">{orders.map((o) => <LabOrderCard key={o.id} o={o} tz={ctx.tz} urls={urls} showDoctor />)}</div>
+        <div className="space-y-3">{orders.map((o) => <LabOrderCard key={o.id} o={o} tz={ctx.tz} urls={urls} showDoctor canAttach={can(ctx.perms, "laboratorio", "edit") || can(ctx.perms, "historias", "edit")} />)}</div>
       )}
     </Card>
   );

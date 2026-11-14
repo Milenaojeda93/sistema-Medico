@@ -8,6 +8,7 @@ export type LabItem = { study: string; category: "laboratorio" | "imagen" | "otr
 
 export async function createLabOrder(input: {
   patientId: string; doctorId: string; consultationId: string | null; priority: "normal" | "urgente"; notes: string; items: LabItem[];
+  location?: "interno" | "externo"; externalLab?: string;
 }): Promise<{ id?: string; error?: string }> {
   const ctx = await getCtx();
   if (!can(ctx.perms, "laboratorio", "create")) return { error: "No tenés permiso para pedir estudios" };
@@ -16,6 +17,7 @@ export async function createLabOrder(input: {
   const { data, error } = await ctx.supabase.rpc("create_lab_order", {
     p_clinic: ctx.clinic.id, p_patient: input.patientId, p_doctor: input.doctorId, p_items: items,
     p_consultation: input.consultationId, p_priority: input.priority, p_notes: input.notes,
+    p_location: input.location === "externo" ? "externo" : "interno", p_external_lab: input.externalLab?.trim() || null,
   });
   if (error) return { error: dbError(error.message) };
   return { id: data as string };
@@ -23,7 +25,7 @@ export async function createLabOrder(input: {
 
 export async function saveLabResult(itemId: string, orderId: string, _: ActionState, fd: FormData): Promise<ActionState> {
   const ctx = await getCtx();
-  if (!can(ctx.perms, "laboratorio", "edit")) return { error: "No tenés permiso para cargar resultados" };
+  if (!can(ctx.perms, "laboratorio", "edit") && !can(ctx.perms, "historias", "edit")) return { error: "No tenés permiso para cargar resultados" };
   const complete = fd.get("complete") === "1";
   const file = fd.get("file") as File | null;
   let path: string | null = null, name: string | null = null;

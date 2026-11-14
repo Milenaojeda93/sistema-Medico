@@ -41,11 +41,11 @@ export default async function ConsultationPage({ params }: { params: Promise<{ i
   const canEdit = can(ctx.perms, "historias", "edit") && mine;
   const working = !closed && canEdit;
   type Hist = { id: string; consulted_at: string; diagnosis: string | null; reason: string; doctors: { full_name: string } | null };
-  type LabDone = { id: string; ordered_at: string; status: string; lab_order_items: { study: string; status: string }[] };
+  type LabDone = { id: string; ordered_at: string; status: string; location: string; lab_order_items: { study: string; status: string }[] };
   const [{ data: appt }, { data: hist }, { data: labs }] = working ? await Promise.all([
     c.appointment_id ? ctx.supabase.from("appointments").select("care_type, patient_insurances(member_number, insurers(trade_name))").eq("id", c.appointment_id).maybeSingle() : Promise.resolve({ data: null }),
     ctx.supabase.from("consultations").select("id, consulted_at, diagnosis, reason, doctors(full_name)").eq("patient_id", p.id).neq("id", id).order("consulted_at", { ascending: false }).limit(5),
-    can(ctx.perms, "laboratorio") ? ctx.supabase.from("lab_orders").select("id, ordered_at, status, lab_order_items(study, status)").eq("patient_id", p.id).neq("status", "anulado").order("ordered_at", { ascending: false }).limit(4) : Promise.resolve({ data: [] }),
+    can(ctx.perms, "laboratorio") ? ctx.supabase.from("lab_orders").select("id, ordered_at, status, location, lab_order_items(study, status)").eq("patient_id", p.id).neq("status", "anulado").order("ordered_at", { ascending: false }).limit(4) : Promise.resolve({ data: [] }),
   ]) : [{ data: null }, { data: [] }, { data: [] }];
   const insName = (appt?.patient_insurances as unknown as { insurers: { trade_name: string } | null } | null)?.insurers?.trade_name;
   const initials = `${p.first_name[0] ?? ""}${p.last_name[0] ?? ""}`.toUpperCase();
@@ -130,6 +130,7 @@ export default async function ConsultationPage({ params }: { params: Promise<{ i
                         </Link>
                         {o.status === "completado"
                           ? <Badge tone="green">Resultados</Badge>
+                          : o.location === "externo" ? <Badge>Externo</Badge>
                           : <Badge tone="amber">{o.status === "en_proceso" ? "En proceso" : "Pedido"}</Badge>}
                       </li>
                     ))}
