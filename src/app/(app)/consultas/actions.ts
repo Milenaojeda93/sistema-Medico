@@ -84,3 +84,20 @@ export async function amendConsultation(id: string, _: ActionState, fd: FormData
   const { error } = await ctx.supabase.rpc("amend_consultation", { p_id: id, p_field: str(fd, "field") ?? "", p_new_value: str(fd, "value") ?? "", p_reason: str(fd, "reason") ?? "" });
   return error ? { error: error.message } : { ok: true };
 }
+
+/** "Atender": abre la consulta de la cita (o la retoma si ya estaba abierta) y lleva al médico a la pantalla completa. */
+export async function startConsultation(appointmentId: string): Promise<void> {
+  const ctx = await getCtx();
+  if (!can(ctx.perms, "historias", "create")) redirect(`/agenda?error=permiso`);
+  const { data: appt } = await ctx.supabase.from("appointments").select("id, patient_id, doctor_id, specialty_id, reason, status").eq("id", appointmentId).eq("clinic_id", ctx.clinic.id).maybeSingle();
+  if (!appt) redirect("/dashboard");
+  const { data: open } = await ctx.supabase.from("consultations").select("id").eq("appointment_id", appt.id).eq("status", "abierta").limit(1).maybeSingle();
+  if (open) redirect(`/consultas/${open.id}`);
+  const { data, error } = await ctx.supabase.from("consultations").insert({
+    clinic_id: ctx.clinic.id, patient_id: appt.patient_id, doctor_id: appt.doctor_id, specialty_id: appt.specialty_id,
+    appointment_id: appt.id, reason: appt.reason ?? "", created_by: ctx.user.id,
+  }).select("id").single();
+  if (error || !data) redirect(`/consultas/nueva?cita=${appt.id}`); // si algo falla, queda el formulario clásico
+  await ctx.supabase.from("appointments").update({ status: "en_atencion" }).eq("id", appt.id).in("status", ["pendiente", "confirmada", "en_espera"]);
+  redirect(`/consultas/${data.id}`);
+}

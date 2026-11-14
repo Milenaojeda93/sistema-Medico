@@ -5,6 +5,7 @@ import { StatusBadge, btnClass } from "@/components/ui";
 import { APPOINTMENT_STATUS, realAllergies } from "@/lib/constants";
 import { addDays, age, cn, fmtTime, todayISO, zonedToUtc } from "@/lib/utils";
 import { AutoRefresh } from "./auto-refresh";
+import { AttendButton } from "../consultas/attend-button";
 
 type Row = {
   id: string; starts_at: string; ends_at: string; status: string; care_type: string; reason: string | null;
@@ -49,7 +50,7 @@ export async function MyDay({ ctx }: { ctx: Ctx }) {
 
   const attend = (r: Row) => {
     const open = r.consultations?.find((c) => c.status === "abierta");
-    return open ? { href: `/consultas/${open.id}`, label: "Continuar consulta" } : { href: `/consultas/nueva?cita=${r.id}`, label: "Atender" };
+    return open ? { href: `/consultas/${open.id}`, label: "Continuar consulta" } : null;
   };
   const name = (r: Row) => (r.patients ? `${r.patients.first_name} ${r.patients.last_name}` : "Paciente");
   const care = (r: Row) => r.care_type === "seguro"
@@ -92,7 +93,9 @@ export async function MyDay({ ctx }: { ctx: Ctx }) {
               )}
             </div>
             <div className="flex flex-col gap-2 sm:items-end">
-              <Link href={attend(next).href} className={cn(btnClass("primary"), "h-12 px-6 text-base")}><Stethoscope className="h-5 w-5" /> {attend(next).label}</Link>
+              {(() => { const a = attend(next); return a
+                ? <Link href={a.href} className={cn(btnClass("primary"), "h-12 px-6 text-base")}><Stethoscope className="h-5 w-5" /> {a.label}</Link>
+                : <AttendButton appointmentId={next.id} size="md" className="h-12 px-6 text-base" />; })()}
               {next.patients && <Link href={`/pacientes/${next.patients.id}`} className="text-xs font-medium text-slate-500 hover:text-primary-600">Ver ficha e historia</Link>}
             </div>
           </div>
@@ -120,7 +123,8 @@ export async function MyDay({ ctx }: { ctx: Ctx }) {
                   </span>
                   <StatusBadge map={APPOINTMENT_STATUS} value={r.status} />
                   {active
-                    ? <Link href={a.href} className={btnClass(r.id === next?.id ? "primary" : "secondary", "sm")}><Stethoscope className="h-4 w-4" /> {a.label}</Link>
+                    ? (a ? <Link href={a.href} className={btnClass(r.id === next?.id ? "primary" : "secondary", "sm")}><Stethoscope className="h-4 w-4" /> {a.label}</Link>
+                      : <AttendButton appointmentId={r.id} variant={r.id === next?.id ? "primary" : "secondary"} />)
                     : r.status === "atendida"
                       ? <span className="inline-flex w-[118px] items-center justify-end gap-1 text-xs font-medium text-green-700"><CheckCircle2 className="h-4 w-4" /> Atendido</span>
                       : <span className="w-[118px]" />}

@@ -64,8 +64,8 @@ export default async function ConsultationPage({ params }: { params: Promise<{ i
             <p className="mt-6 border-t border-slate-100 pt-4 text-xs text-slate-500">Creada por {who(c.created_by)} · última modificación {fmtDateTime(c.updated_at, ctx.tz)}</p>
             <FinishBar patient={`${p.first_name} ${p.last_name}`} checks={[
               { label: "Diagnóstico", done: !!(c.diagnosis ?? "").trim() },
-              { label: rxCount ? `Receta (${rxCount})` : "Receta", done: rxCount > 0 },
-              { label: labCount ? `Estudios (${labCount})` : "Estudios", done: labCount > 0 },
+              ...(can(ctx.perms, "recetas") ? [{ label: rxCount ? `Receta (${rxCount})` : "Receta", done: rxCount > 0, href: "#receta" }] : []),
+              ...(can(ctx.perms, "laboratorio") ? [{ label: labCount ? `Estudios (${labCount})` : "Estudios", done: labCount > 0, href: "#estudios" }] : []),
             ]} />
           </ActionForm>
         </Card>

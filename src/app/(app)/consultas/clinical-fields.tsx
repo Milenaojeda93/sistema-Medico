@@ -8,7 +8,10 @@ export function ClinicalFields({ c }: { c?: C }) {
   return (
     <div className="space-y-6">
       <section>
-        <h3 className="mb-3 text-sm font-semibold text-slate-800">Motivo y anamnesis</h3>
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h3 className="text-sm font-semibold text-slate-800">Motivo y anamnesis</h3>
+          <p className="text-xs text-slate-500">Los campos con <span className="text-rose-500">*</span> son obligatorios. El resto es opcional.</p>
+        </div>
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Motivo de consulta" name="reason" required className="md:col-span-2"><Input name="reason" defaultValue={v("reason")} required /></Field>
           <Field label="Síntomas" name="symptoms"><Textarea name="symptoms" defaultValue={v("symptoms")} /></Field>
@@ -16,7 +19,7 @@ export function ClinicalFields({ c }: { c?: C }) {
         </div>
       </section>
       <section>
-        <h3 className="mb-3 text-sm font-semibold text-slate-800">Signos vitales {bmi && <span className="ml-2 text-xs font-normal text-slate-500">IMC {bmi}</span>}</h3>
+        <h3 className="mb-3 text-sm font-semibold text-slate-800">Signos vitales <span className="text-xs font-normal text-slate-400">(opcional)</span> {bmi && <span className="ml-2 text-xs font-normal text-slate-500">IMC {bmi}</span>}</h3>
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-8">
           <Field label="PA sistólica" name="bp_systolic"><Input name="bp_systolic" type="number" inputMode="numeric" placeholder="mmHg" defaultValue={v("bp_systolic")} /></Field>
           <Field label="PA diastólica" name="bp_diastolic"><Input name="bp_diastolic" type="number" placeholder="mmHg" defaultValue={v("bp_diastolic")} /></Field>
@@ -31,7 +34,7 @@ export function ClinicalFields({ c }: { c?: C }) {
       <section>
         <h3 className="mb-3 text-sm font-semibold text-slate-800">Diagnóstico y plan</h3>
         <div className="grid gap-4 md:grid-cols-4">
-          <Field label="Diagnóstico" name="diagnosis" className="md:col-span-3"><Input name="diagnosis" defaultValue={v("diagnosis")} /></Field>
+          <Field label="Diagnóstico" name="diagnosis" required hint="Obligatorio para finalizar la atención" className="md:col-span-3"><Input name="diagnosis" defaultValue={v("diagnosis")} placeholder="Ej.: Faringitis aguda" /></Field>
           <Field label="Código CIE-10" name="diagnosis_code"><Input name="diagnosis_code" defaultValue={v("diagnosis_code")} placeholder="Ej.: J02.9" /></Field>
           <Field label="Tratamiento" name="treatment" className="md:col-span-2"><Textarea name="treatment" defaultValue={v("treatment")} /></Field>
           <Field label="Indicaciones" name="instructions" className="md:col-span-2"><Textarea name="instructions" defaultValue={v("instructions")} /></Field>

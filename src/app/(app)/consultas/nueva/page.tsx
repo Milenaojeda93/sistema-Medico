@@ -1,11 +1,11 @@
+import { redirect } from "next/navigation";
 import { guard } from "@/lib/context";
-import { Card, Notice, PageHeader } from "@/components/ui";
+import { Card, Field, Input, Notice, PageHeader } from "@/components/ui";
 import { CLINICAL_SUGGESTIONS as CS } from "@/lib/constants";
 import { ConsultaPickers } from "../header-pickers";
-import { FinishBar } from "../finish-bar";
-import { ActionForm } from "@/components/ui/client";
+import { ActionForm, SubmitButton } from "@/components/ui/client";
+import { ArrowRight } from "lucide-react";
 import { age } from "@/lib/utils";
-import { ClinicalFields } from "../clinical-fields";
 import { createConsultation } from "../actions";
 
 export const metadata = { title: "Nueva consulta" };
@@ -16,6 +16,11 @@ export default async function NewConsultation({ searchParams }: { searchParams: 
   const { data: appt } = sp.cita
     ? await ctx.supabase.from("appointments").select("id, patient_id, doctor_id, specialty_id, reason").eq("id", sp.cita).eq("clinic_id", ctx.clinic.id).maybeSingle()
     : { data: null };
+  if (appt) {
+    // Si la cita ya tiene una consulta abierta, se retoma.
+    const { data: open } = await ctx.supabase.from("consultations").select("id").eq("appointment_id", appt.id).eq("status", "abierta").limit(1).maybeSingle();
+    if (open) redirect(`/consultas/${open.id}`);
+  }
   const patientId = appt?.patient_id ?? sp.paciente ?? "";
 
   const [{ data: doctors }, { data: specialties }, { data: patient }, { data: patients }] = await Promise.all([
@@ -52,11 +57,15 @@ export default async function NewConsultation({ searchParams }: { searchParams: 
               defaultSpecialty={appt?.specialty_id ?? ""}
             />
           </div>
-          <ClinicalFields c={{ reason: appt?.reason ?? "" }} />
-          <p className="mt-6 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            ¿Necesitás receta o estudios? Tocá <b>Guardar y seguir</b> y se habilitan abajo. Cuando termines, <b>Finalizar atención</b> deja al paciente como atendido.
-          </p>
-          <FinishBar patient={patient ? `${patient.first_name} ${patient.last_name}` : "Nueva consulta"} draftLabel="Guardar y seguir" />
+          <div className="grid gap-4 md:grid-cols-3">
+            <Field label="Motivo de consulta" name="reason" required className="md:col-span-3">
+              <Input name="reason" defaultValue={appt?.reason ?? ""} required placeholder="Ej.: Dolor de garganta y fiebre" />
+            </Field>
+          </div>
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+            <p className="text-sm text-slate-500">En la pantalla siguiente cargás los signos vitales, el diagnóstico, la receta y los estudios.</p>
+            <SubmitButton className="h-11 px-5 text-base">Empezar consulta <ArrowRight className="h-5 w-5" /></SubmitButton>
+          </div>
         </ActionForm>
       </Card>
     </>

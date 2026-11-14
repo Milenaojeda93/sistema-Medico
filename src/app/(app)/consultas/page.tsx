@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AttendButton } from "./attend-button";
 import { Stethoscope, Plus } from "lucide-react";
 import { guard, can } from "@/lib/context";
 import { Badge, Card, EmptyState, LinkButton, PageHeader, StatusBadge } from "@/components/ui";
@@ -72,8 +73,8 @@ export default async function Consultations({ searchParams }: { searchParams: Pr
                           )}
                           {cons && clinical ? (
                             <LinkButton size="sm" variant="soft" href={`/consultas/${cons.id}`}>Ver consulta</LinkButton>
-                          ) : can(ctx.perms, "historias", "create") && ["confirmada", "en_espera", "en_atencion"].includes(a.status) ? (
-                            <LinkButton size="sm" variant="success" href={`/consultas/nueva?cita=${a.id}`}><Stethoscope className="h-3.5 w-3.5" /> Atender</LinkButton>
+                          ) : can(ctx.perms, "historias", "create") && ["pendiente", "confirmada", "en_espera", "en_atencion"].includes(a.status) ? (
+                            <AttendButton appointmentId={a.id} variant="success" />
                           ) : null}
                         </div>
                       </td>

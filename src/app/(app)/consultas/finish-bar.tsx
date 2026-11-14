@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 /** Barra fija al pie durante la atención: guardar o finalizar (el paciente queda como atendido). */
 export function FinishBar({ patient, checks, draftLabel = "Guardar" }: {
-  patient: string; checks?: { label: string; done: boolean }[]; draftLabel?: string;
+  patient: string; checks?: { label: string; done: boolean; href?: string }[]; draftLabel?: string;
 }) {
   const { pending } = useFormStatus();
   return (
@@ -22,9 +22,13 @@ export function FinishBar({ patient, checks, draftLabel = "Guardar" }: {
           {checks && (
             <ul className="hidden items-center gap-4 text-xs text-slate-600 md:flex">
               {checks.map((c) => (
-                <li key={c.label} className="flex items-center gap-1.5">
-                  {c.done ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <Circle className="h-4 w-4 text-slate-300" />}
-                  <span className={c.done ? "text-slate-800" : ""}>{c.label}</span>
+                <li key={c.label}>
+                  {(() => {
+                    const inner = <>{c.done ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <Circle className="h-4 w-4 text-slate-300" />}<span className={c.done ? "text-slate-800" : ""}>{c.label}</span></>;
+                    return c.href
+                      ? <a href={c.href} className="flex items-center gap-1.5 rounded-md px-1.5 py-1 hover:bg-slate-100 hover:text-primary-700">{inner}</a>
+                      : <span className="flex items-center gap-1.5 px-1.5 py-1">{inner}</span>;
+                  })()}
                 </li>
               ))}
             </ul>

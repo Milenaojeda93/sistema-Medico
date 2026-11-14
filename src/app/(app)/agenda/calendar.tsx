@@ -9,6 +9,7 @@ import { SubmitButton, type ActionState } from "@/components/ui/client";
 import { APPOINTMENT_STATUS } from "@/lib/constants";
 import { addDays, cn, fmtTime, gs, isoDate, toLocalInput, zonedParts } from "@/lib/utils";
 import { DoctorCards, PatientPicker, SpecialtyChips } from "./pickers";
+import { AttendButton } from "../consultas/attend-button";
 import { getDoctorBusy, saveAppointment, setAppointmentStatus, type Busy } from "./actions";
 
 type Appt = {
@@ -320,7 +321,7 @@ function AppointmentDetail({ a, tz, canEdit, canConsult, onEdit, onDone }: { a: 
       )}
       <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-4">
         <Link href={`/pacientes/${a.patient_id}`} className={btnClass("secondary", "sm")}><User className="h-4 w-4" /> Ver paciente</Link>
-        {canConsult && ["pendiente", "confirmada", "en_espera", "en_atencion"].includes(a.status) && <Link href={`/consultas/nueva?cita=${a.id}`} className={btnClass("success", "sm")}><Stethoscope className="h-4 w-4" /> Atender</Link>}
+        {canConsult && ["pendiente", "confirmada", "en_espera", "en_atencion"].includes(a.status) && <AttendButton appointmentId={a.id} variant="success" label={a.status === "en_atencion" ? "Continuar consulta" : "Atender"} />}
         {canEdit && !["atendida"].includes(a.status) && <button onClick={onEdit} className={cn(btnClass("ghost", "sm"), "ml-auto")}>Editar / reprogramar</button>}
       </div>
     </div>
