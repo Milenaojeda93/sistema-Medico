@@ -19,7 +19,7 @@ const fmtCI = (d: string) => (/^\d+$/.test(d) ? d.replace(/\B(?=(\d{3})+(?!\d))/
 const WD = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
 
 /** Panel de inicio del médico: sus pacientes de hoy con botón para atender. */
-export async function MyDay({ ctx }: { ctx: Ctx }) {
+export async function MyDay({ ctx, showUpcoming = true, title = "Tus pacientes de hoy" }: { ctx: Ctx; showUpcoming?: boolean; title?: string }) {
   const tz = ctx.tz;
   const today = todayISO(tz);
   const from = zonedToUtc(`${today}T00:00`, tz).toISOString();
@@ -62,7 +62,7 @@ export async function MyDay({ ctx }: { ctx: Ctx }) {
       <AutoRefresh seconds={60} />
       <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Tus pacientes de hoy</h2>
+          <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
           <p className="text-sm text-slate-500">
             {rows.length === 0 ? "No tenés citas agendadas para hoy." : <>{pending.length} por atender · {done} atendido{done === 1 ? "" : "s"} · se actualiza solo</>}
           </p>
@@ -135,7 +135,7 @@ export async function MyDay({ ctx }: { ctx: Ctx }) {
         </div>
       )}
 
-      {byDay.size > 0 && (
+      {showUpcoming && byDay.size > 0 && (
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
           <span className="inline-flex items-center gap-1.5 text-slate-500"><CalendarDays className="h-4 w-4" /> Próximos días:</span>
           {[...byDay.entries()].map(([d, n]) => (
@@ -145,7 +145,7 @@ export async function MyDay({ ctx }: { ctx: Ctx }) {
           ))}
         </div>
       )}
-      {rows.length === 0 && byDay.size === 0 && (
+      {rows.length === 0 && (byDay.size === 0 || !showUpcoming) && (
         <div className="card flex items-center gap-3 p-5 text-sm text-slate-500"><CalendarClock className="h-5 w-5 text-slate-400" /> Cuando la recepción te agende un paciente, va a aparecer acá.</div>
       )}
     </section>

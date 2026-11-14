@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import {
   LayoutDashboard, Users, CalendarDays, Stethoscope, FileHeart, UserRound, Shapes, ShieldCheck, Building2, BadgeCheck,
   Pill, FlaskConical, Cross, Boxes, Receipt, Wallet, BarChart3, KeyRound, Settings, ScrollText, Menu, X, Crown,
-  ChevronDown, ChevronsLeft, ChevronsRight, HeartPulse,
+  ChevronDown, ChevronsLeft, ChevronsRight, HeartPulse, CalendarCheck,
 } from "lucide-react";
 import { MODULES } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -23,7 +23,7 @@ function read(key: string) {
   try { return localStorage.getItem(key); } catch { return null; }
 }
 
-export function Sidebar({ allowed, isSuper, clinicName }: { allowed: string[]; isSuper: boolean; clinicName: string }) {
+export function Sidebar({ allowed, isSuper, clinicName, myAppointments = null }: { allowed: string[]; isSuper: boolean; clinicName: string; myAppointments?: number | null }) {
   const path = usePathname();
   const [open, setOpen] = useState(false);
   const [compact, setCompact] = useState(false);
@@ -76,8 +76,28 @@ export function Sidebar({ allowed, isSuper, clinicName }: { allowed: string[]; i
     );
   };
 
+  const myItem = myAppointments !== null && (() => {
+    const active = isActive("/mis-citas");
+    return (
+      <div className={mini ? "pb-1" : "pb-3"}>
+        <Link href="/mis-citas" title={mini ? `Mis citas (${myAppointments} hoy)` : undefined} onClick={() => setOpen(false)}
+          className={cn("group relative flex items-center rounded-[10px] text-[13.5px] font-semibold transition-colors",
+            mini ? "h-10 justify-center" : "gap-3 px-3 py-2.5",
+            active ? "bg-primary-600 text-white shadow-[0_4px_14px_-4px_rgb(37_99_235/0.7)]" : "bg-primary-500/15 text-primary-100 ring-1 ring-inset ring-primary-400/25 hover:bg-primary-500/25")}>
+          <CalendarCheck className="h-[18px] w-[18px] shrink-0" />
+          {!mini && <span className="flex-1 truncate">Mis citas</span>}
+          {myAppointments > 0 && (mini
+            ? <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white ring-2 ring-ink-900">{myAppointments}</span>
+            : <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[11px] font-bold leading-none text-white" aria-label={`${myAppointments} pacientes por atender hoy`}>{myAppointments}</span>)}
+          {!mini && myAppointments === 0 && <span className="text-[11px] font-normal text-primary-200/70">Al día</span>}
+        </Link>
+      </div>
+    );
+  })();
+
   const nav = (
     <nav className={cn("flex-1 overflow-y-auto py-4 [scrollbar-color:rgb(255_255_255/0.12)_transparent] [scrollbar-width:thin]", mini ? "space-y-3 px-2" : "space-y-1 px-3")}>
+      {myItem}
       {groups.map((g) => {
         const items = MODULES.filter((m) => m.group === g && allowed.includes(m.key));
         if (!items.length) return null;

@@ -9,6 +9,7 @@ import { canSee, cardCounts, rangeCharts, type Detail } from "./data";
 import { parseRange, rangeQuery } from "./range";
 import { RangePicker } from "./range-picker";
 import { MyDay } from "./my-day";
+import { AttendedBanner } from "./attended-banner";
 
 export const metadata = { title: "Dashboard" };
 
@@ -37,12 +38,6 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   ]);
   if (error) throw new Error(error.message);
   const s = data as Stats;
-  let done: { id: string; name: string } | null = null;
-  if (sp.atendido && /^[0-9a-f-]{36}$/.test(sp.atendido)) {
-    const { data: c } = await ctx.supabase.from("consultations").select("id, patients(first_name, last_name)").eq("id", sp.atendido).eq("clinic_id", ctx.clinic.id).maybeSingle();
-    const pt = c?.patients as unknown as { first_name: string; last_name: string } | null;
-    if (c && pt) done = { id: c.id, name: `${pt.first_name} ${pt.last_name}` };
-  }
   const first = (ctx.profile?.full_name ?? "").split(" ")[0];
   const own = ctx.ownOnly;
   const money = canSee(ctx, "ingresos");
@@ -53,13 +48,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     <>
       <PageHeader title={`Hola${first ? ", " + first : ""}`} description={own ? "Tu resumen: tus pacientes, tu agenda y tus consultas" : `Resumen de ${ctx.clinic.name}`} />
       {own && !ctx.myDoctorIds.length && <div className="mb-4"><Notice tone="amber">Tu usuario todavía no está vinculado a una ficha de profesional. Pedile al administrador que lo vincule en <b>Médicos y profesionales</b>.</Notice></div>}
-      {done && (
-        <div className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl bg-green-50 px-5 py-4 ring-1 ring-green-200">
-          <CheckCircle2 className="h-6 w-6 shrink-0 text-green-600" />
-          <p className="flex-1 text-sm text-green-900"><b>{done.name}</b> quedó como atendido. La consulta está guardada en su historia clínica.</p>
-          <Link href={`/consultas/${done.id}`} className="text-sm font-medium text-green-800 underline hover:text-green-900">Ver o imprimir la consulta</Link>
-        </div>
-      )}
+      <AttendedBanner ctx={ctx} consultationId={sp.atendido} />
       {ctx.myDoctorIds.length > 0 && <MyDay ctx={ctx} />}
       {ctx.myDoctorIds.length > 0 && <h2 className="mb-3 text-lg font-semibold text-slate-900">Tu resumen</h2>}
       <RangePicker r={r} base="/dashboard" />

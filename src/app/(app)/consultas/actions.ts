@@ -57,7 +57,7 @@ export async function createConsultation(_: ActionState, fd: FormData): Promise<
   if (fd.get("close") === "1") {
     const { error: e2 } = await ctx.supabase.rpc("close_consultation", { p_id: data.id });
     if (e2) return { error: "La consulta se guardó pero no se pudo finalizar: " + e2.message };
-    redirect(`/dashboard?atendido=${data.id}`);
+    redirect(`${ctx.myDoctorIds.length ? "/mis-citas" : "/dashboard"}?atendido=${data.id}`);
   }
   redirect(`/consultas/${data.id}`);
 }
@@ -74,7 +74,7 @@ export async function updateConsultation(id: string, _: ActionState, fd: FormDat
   if (fd.get("close") === "1") {
     const { error: e2 } = await ctx.supabase.rpc("close_consultation", { p_id: id });
     if (e2) return { error: e2.message };
-    redirect(`/dashboard?atendido=${id}`);
+    redirect(`${ctx.myDoctorIds.length ? "/mis-citas" : "/dashboard"}?atendido=${id}`);
   }
   return { ok: true, message: "Cambios guardados" };
 }
