@@ -87,7 +87,7 @@ export default async function ConsultationPage({ params }: { params: Promise<{ i
           <div className="grid gap-6 xl:grid-cols-3">
             <div className="min-w-0 xl:col-span-2">
               <TabNav receta={can(ctx.perms, "recetas") ? rxCount : undefined} estudios={can(ctx.perms, "laboratorio") ? labCount : undefined} />
-              <ActionForm action={updateConsultation.bind(null, id)}>
+              <ActionForm action={updateConsultation.bind(null, id)} messagesOnTop>
                 <TabPane name="consulta">
                   <Card>
                     <ClinicalFields c={c} compact />

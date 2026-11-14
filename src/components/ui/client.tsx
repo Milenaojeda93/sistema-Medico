@@ -31,7 +31,7 @@ export function SubmitButton({ children, variant = "primary", size = "md", class
   );
 }
 
-export function ActionForm({ action, children, className, resetOnSuccess = false, successMessage }: { action: FormAction; children: ReactNode; className?: string; resetOnSuccess?: boolean; successMessage?: string }) {
+export function ActionForm({ action, children, className, resetOnSuccess = false, successMessage, messagesOnTop = false }: { action: FormAction; children: ReactNode; className?: string; resetOnSuccess?: boolean; successMessage?: string; messagesOnTop?: boolean }) {
   const [state, formAction] = useActionState(action, null);
   const modal = useContext(ModalCtx);
   const router = useRouter();
@@ -48,13 +48,19 @@ export function ActionForm({ action, children, className, resetOnSuccess = false
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
+  const msgs = (gap: string) => (
+    <>
+      {state?.error && <p ref={errRef} className={cn(gap, "scroll-mt-28 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-100")}>{state.error}</p>}
+      {state?.ok && (state.message || successMessage) && !modal && (
+        <p className={cn(gap, "rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700 ring-1 ring-green-100")}>{state.message || successMessage}</p>
+      )}
+    </>
+  );
   return (
     <form ref={ref} action={formAction} className={className}>
+      {messagesOnTop && msgs("mb-3")}
       {children}
-      {state?.error && <p ref={errRef} className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-100">{state.error}</p>}
-      {state?.ok && (state.message || successMessage) && !modal && (
-        <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700 ring-1 ring-green-100">{state.message || successMessage}</p>
-      )}
+      {!messagesOnTop && msgs("mt-3")}
     </form>
   );
 }

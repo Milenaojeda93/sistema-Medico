@@ -1,7 +1,8 @@
 "use client";
 
 import { useFormStatus } from "react-dom";
-import { CheckCircle2, Circle, Loader2, Save } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AlertTriangle, CheckCircle2, Circle, Loader2, Save } from "lucide-react";
 import { btnClass } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { useWorkspace, type TabKey } from "./workspace";
@@ -12,9 +13,18 @@ export function FinishBar({ patient, checks, draftLabel = "Guardar" }: {
 }) {
   const { pending } = useFormStatus();
   const { tab, setTab } = useWorkspace();
+  const [warn, setWarn] = useState<string | null>(null);
+  const spacer = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const form = spacer.current?.closest("form");
+    if (!form || !warn) return;
+    const clear = () => setWarn(null);
+    form.addEventListener("input", clear);
+    return () => form.removeEventListener("input", clear);
+  }, [warn]);
   return (
     <>
-      <div className="h-24" aria-hidden="true" />
+      <div ref={spacer} className="h-24" aria-hidden="true" />
       <div className="finish-bar fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.18)] backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 sm:px-6">
           <div className="min-w-0">
@@ -34,7 +44,12 @@ export function FinishBar({ patient, checks, draftLabel = "Guardar" }: {
               ))}
             </ul>
           )}
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            {warn && (
+              <span role="alert" className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700 ring-1 ring-red-200">
+                <AlertTriangle className="h-4 w-4" /> {warn}
+              </span>
+            )}
             <button type="submit" disabled={pending}
               onClick={(e) => { if (tab !== "consulta") { e.preventDefault(); const b = e.currentTarget; setTab("consulta"); requestAnimationFrame(() => b.form?.requestSubmit(b)); } }}
               className={btnClass("secondary")}><Save className="h-4 w-4" /> {draftLabel}</button>
@@ -42,6 +57,17 @@ export function FinishBar({ patient, checks, draftLabel = "Guardar" }: {
               onClick={(e) => {
                 e.preventDefault();
                 const b = e.currentTarget;
+                const form = b.form;
+                // Revisamos lo obligatorio antes de preguntar: así el aviso aparece acá, a la vista.
+                const field = (n: string) => form?.elements.namedItem(n) as HTMLInputElement | null;
+                const missing = !field("reason")?.value.trim() ? "reason" : field("diagnosis") && !field("diagnosis")!.value.trim() ? "diagnosis" : null;
+                if (missing) {
+                  setWarn(missing === "reason" ? "Completá el motivo de consulta" : "Completá el diagnóstico para finalizar");
+                  setTab("consulta");
+                  requestAnimationFrame(() => { const el = field(missing); el?.scrollIntoView({ behavior: "smooth", block: "center" }); el?.focus({ preventScroll: true }); });
+                  return;
+                }
+                setWarn(null);
                 if (!window.confirm(`¿Finalizar la atención de ${patient}?\n\nLa consulta se guarda y el paciente queda como ATENDIDO. Después solo se puede corregir con una enmienda.`)) return;
                 setTab("consulta");
                 requestAnimationFrame(() => b.form?.requestSubmit(b));
