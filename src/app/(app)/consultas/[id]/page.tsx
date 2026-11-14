@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { realAllergies } from "@/lib/constants";
 import { notFound } from "next/navigation";
-import { FlaskConical, Lock, Pill, Receipt } from "lucide-react";
+import { AlertTriangle, FlaskConical, Lock, Pill, Receipt } from "lucide-react";
 import { guard, can } from "@/lib/context";
 import { Badge, Card, DL, Field, Input, LinkButton, Notice, PageHeader, Select, Textarea } from "@/components/ui";
 import { ActionForm, Modal, SubmitButton } from "@/components/ui/client";
-import { age, fmtDateTime } from "@/lib/utils";
+import { age, fmtDate, fmtDateTime } from "@/lib/utils";
 import { ClinicalFields } from "../clinical-fields";
 import { FinishBar } from "../finish-bar";
+import { TabNav, TabPane, Workspace } from "../workspace";
 import { amendConsultation, updateConsultation } from "../actions";
 import { PrescriptionPanel } from "../../recetas/panel";
 import { LabPanel } from "../../laboratorio/panel";
@@ -38,6 +39,16 @@ export default async function ConsultationPage({ params }: { params: Promise<{ i
   const closed = c.status === "cerrada";
   const mine = !ctx.ownOnly || ctx.myDoctorIds.includes(c.doctor_id);
   const canEdit = can(ctx.perms, "historias", "edit") && mine;
+  const working = !closed && canEdit;
+  type Hist = { id: string; consulted_at: string; diagnosis: string | null; reason: string; doctors: { full_name: string } | null };
+  type LabDone = { id: string; ordered_at: string; status: string; lab_order_items: { study: string; status: string }[] };
+  const [{ data: appt }, { data: hist }, { data: labs }] = working ? await Promise.all([
+    c.appointment_id ? ctx.supabase.from("appointments").select("care_type, patient_insurances(member_number, insurers(trade_name))").eq("id", c.appointment_id).maybeSingle() : Promise.resolve({ data: null }),
+    ctx.supabase.from("consultations").select("id, consulted_at, diagnosis, reason, doctors(full_name)").eq("patient_id", p.id).neq("id", id).order("consulted_at", { ascending: false }).limit(5),
+    can(ctx.perms, "laboratorio") ? ctx.supabase.from("lab_orders").select("id, ordered_at, status, lab_order_items(study, status)").eq("patient_id", p.id).neq("status", "anulado").order("ordered_at", { ascending: false }).limit(4) : Promise.resolve({ data: [] }),
+  ]) : [{ data: null }, { data: [] }, { data: [] }];
+  const insName = (appt?.patient_insurances as unknown as { insurers: { trade_name: string } | null } | null)?.insurers?.trade_name;
+  const initials = `${p.first_name[0] ?? ""}${p.last_name[0] ?? ""}`.toUpperCase();
 
   return (
     <>
@@ -47,32 +58,89 @@ export default async function ConsultationPage({ params }: { params: Promise<{ i
         description={`${fmtDateTime(c.consulted_at, ctx.tz)} · ${d.full_name} (Mat. ${d.license_number})${c.specialties ? " · " + (c.specialties as { name: string }).name : ""} · CI ${p.document}${p.birth_date ? ` · ${age(p.birth_date)} años` : ""}`}
         actions={
           <>
-            {can(ctx.perms, "recetas") && <a href="#receta" className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-white px-3.5 text-sm font-medium text-slate-700 shadow-soft ring-1 ring-inset ring-slate-200 hover:bg-slate-50"><Pill className="h-4 w-4" /> Receta</a>}
-            {can(ctx.perms, "laboratorio") && <a href="#estudios" className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-white px-3.5 text-sm font-medium text-slate-700 shadow-soft ring-1 ring-inset ring-slate-200 hover:bg-slate-50"><FlaskConical className="h-4 w-4" /> Estudios</a>}
+            {!working && can(ctx.perms, "recetas") && <a href="#receta" className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-white px-3.5 text-sm font-medium text-slate-700 shadow-soft ring-1 ring-inset ring-slate-200 hover:bg-slate-50"><Pill className="h-4 w-4" /> Receta</a>}
+            {!working && can(ctx.perms, "laboratorio") && <a href="#estudios" className="inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-white px-3.5 text-sm font-medium text-slate-700 shadow-soft ring-1 ring-inset ring-slate-200 hover:bg-slate-50"><FlaskConical className="h-4 w-4" /> Estudios</a>}
             {invoice ? <LinkButton variant="secondary" href={`/facturacion/${invoice.id}`}><Receipt className="h-4 w-4" /> Factura {invoice.number}</LinkButton>
               : can(ctx.perms, "facturacion", "create") && <LinkButton variant="secondary" href={`/facturacion/nueva?paciente=${p.id}&consulta=${id}`}><Receipt className="h-4 w-4" /> Facturar</LinkButton>}
           </>
         }
       />
-      {realAllergies(p.allergies) && <div className="mb-4"><Notice tone="red"><b>Alergias:</b> {p.allergies}</Notice></div>}
+      {!working && realAllergies(p.allergies) && <div className="mb-4"><Notice tone="red"><b>Alergias:</b> {p.allergies}</Notice></div>}
       {!mine && <div className="mb-4"><Notice tone="blue">Consulta realizada por <b>{d.full_name}</b>. Podés verla como parte de la historia clínica compartida, pero solo quien la atendió puede modificarla.</Notice></div>}
 
-      {!closed && canEdit ? (
-        <Card>
-          <ActionForm action={updateConsultation.bind(null, id)}>
-            <ClinicalFields c={c} />
-            <p className="mt-6 border-t border-slate-100 pt-4 text-xs text-slate-500">Creada por {who(c.created_by)} · última modificación {fmtDateTime(c.updated_at, ctx.tz)}</p>
-            <FinishBar patient={`${p.first_name} ${p.last_name}`} checks={[
-              { label: "Diagnóstico", done: !!(c.diagnosis ?? "").trim() },
-              ...(can(ctx.perms, "recetas") ? [{ label: rxCount ? `Receta (${rxCount})` : "Receta", done: rxCount > 0, href: "#receta" }] : []),
-              ...(can(ctx.perms, "laboratorio") ? [{ label: labCount ? `Estudios (${labCount})` : "Estudios", done: labCount > 0, href: "#estudios" }] : []),
-            ]} />
-          </ActionForm>
-        </Card>
+      {working ? (
+        <Workspace>
+          <div className="card mb-5 flex flex-wrap items-center gap-4 p-5">
+            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary-100 text-lg font-semibold text-primary-700">{initials}</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-xl font-semibold text-slate-900">{p.first_name} {p.last_name}</p>
+              <p className="text-sm text-slate-500">
+                {p.birth_date ? `${age(p.birth_date)} años · ` : ""}CI {p.document.replace(/\B(?=(\d{3})+(?!\d))/g, ".")}
+                {appt ? ` · ${appt.care_type === "seguro" ? insName ?? "Seguro" : "Particular"}` : ""}
+              </p>
+            </div>
+            {realAllergies(p.allergies)
+              ? <span className="inline-flex items-center gap-1.5 rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700 ring-1 ring-red-200"><AlertTriangle className="h-4 w-4" /> Alergia: {realAllergies(p.allergies)}</span>
+              : <span className="inline-flex items-center gap-1.5 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500 ring-1 ring-slate-200">Sin alergias registradas</span>}
+          </div>
+
+          <div className="grid gap-6 xl:grid-cols-3">
+            <div className="min-w-0 xl:col-span-2">
+              <TabNav receta={can(ctx.perms, "recetas") ? rxCount : undefined} estudios={can(ctx.perms, "laboratorio") ? labCount : undefined} />
+              <ActionForm action={updateConsultation.bind(null, id)}>
+                <TabPane name="consulta">
+                  <Card>
+                    <ClinicalFields c={c} compact />
+                    <p className="mt-6 border-t border-slate-100 pt-4 text-xs text-slate-500">Se guarda al tocar «Guardar» o «Finalizar atención» · última modificación {fmtDateTime(c.updated_at, ctx.tz)}</p>
+                  </Card>
+                </TabPane>
+                <FinishBar patient={`${p.first_name} ${p.last_name}`} checks={[
+                  { label: "Diagnóstico", done: !!(c.diagnosis ?? "").trim() },
+                  ...(can(ctx.perms, "recetas") ? [{ label: rxCount ? `Receta (${rxCount})` : "Receta", done: rxCount > 0, tab: "receta" as const }] : []),
+                  ...(can(ctx.perms, "laboratorio") ? [{ label: labCount ? `Estudios (${labCount})` : "Estudios", done: labCount > 0, tab: "estudios" as const }] : []),
+                ]} />
+              </ActionForm>
+              {can(ctx.perms, "recetas") && <TabPane name="receta"><PrescriptionPanel ctx={ctx} patientId={p.id} doctorId={c.doctor_id} consultationId={id} diagnosis={c.diagnosis} allergies={realAllergies(p.allergies)} readOnly={!mine} /></TabPane>}
+              {can(ctx.perms, "laboratorio") && <TabPane name="estudios"><LabPanel ctx={ctx} patientId={p.id} doctorId={c.doctor_id} consultationId={id} readOnly={!mine} /></TabPane>}
+            </div>
+
+            <aside className="space-y-4">
+              <Card title="Historial compartido" actions={<Link href={`/pacientes/${p.id}?tab=historia`} className="text-xs font-medium text-primary-600 hover:underline">Ver todo</Link>}>
+                {!(hist as unknown as Hist[] | null)?.length ? <p className="text-sm text-slate-500">Primera consulta registrada de este paciente.</p> : (
+                  <ol className="space-y-3">
+                    {(hist as unknown as Hist[]).map((h) => (
+                      <li key={h.id} className="relative border-l-2 border-primary-100 pl-3">
+                        <Link href={`/consultas/${h.id}`} target="_blank" className="block hover:text-primary-700">
+                          <p className="text-xs text-slate-500">{fmtDate(h.consulted_at, ctx.tz)} · {h.doctors?.full_name ?? ""}</p>
+                          <p className="text-sm font-medium text-slate-800">{h.diagnosis || h.reason || "Consulta"}</p>
+                        </Link>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </Card>
+              {!!(labs as unknown as LabDone[] | null)?.length && (
+                <Card title="Estudios del paciente">
+                  <ul className="space-y-2.5">
+                    {(labs as unknown as LabDone[]).map((o) => (
+                      <li key={o.id} className="flex items-start justify-between gap-2 text-sm">
+                        <Link href={`/laboratorio/${o.id}`} target="_blank" className="min-w-0 hover:text-primary-700">
+                          <p className="text-xs text-slate-500">{fmtDate(o.ordered_at, ctx.tz)}</p>
+                          <p className="truncate text-slate-800">{o.lab_order_items.map((i) => i.study).join(", ")}</p>
+                        </Link>
+                        {o.status === "completado"
+                          ? <Badge tone="green">Resultados</Badge>
+                          : <Badge tone="amber">{o.status === "en_proceso" ? "En proceso" : "Pedido"}</Badge>}
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              )}
+            </aside>
+          </div>
+        </Workspace>
       ) : null}
-      {!closed && canEdit && <div className="mt-6"><div id="receta" className="scroll-mt-24"><PrescriptionPanel ctx={ctx} patientId={p.id} doctorId={c.doctor_id} consultationId={id} diagnosis={c.diagnosis} allergies={realAllergies(p.allergies)} readOnly={!mine} /></div></div>}
-      {!closed && canEdit && <div className="mt-6"><div id="estudios" className="scroll-mt-24"><LabPanel ctx={ctx} patientId={p.id} doctorId={c.doctor_id} consultationId={id} readOnly={!mine} /></div></div>}
-      {!closed && canEdit ? null : (
+      {working ? null : (
         <div className="grid gap-6 xl:grid-cols-3">
           <div className="space-y-6 xl:col-span-2">
             <Card title="Registro clínico">
