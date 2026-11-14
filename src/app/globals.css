@@ -60,6 +60,8 @@
 @media (min-width: 1024px) {
   .app-shell { padding-left: 264px; }
   html[data-sidebar="compact"] .app-shell { padding-left: 76px; }
+  .finish-bar { left: 264px; }
+  html[data-sidebar="compact"] .finish-bar { left: 76px; }
 }
 
 details > summary::-webkit-details-marker { display: none; }

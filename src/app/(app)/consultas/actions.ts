@@ -45,6 +45,7 @@ export async function createConsultation(_: ActionState, fd: FormData): Promise<
   const patient_id = str(fd, "patient_id");
   const doctor_id = str(fd, "doctor_id");
   if (!patient_id || !doctor_id || !c.reason) return { error: "Paciente, profesional y motivo de consulta son obligatorios" };
+  if (fd.get("close") === "1" && !String(c.diagnosis ?? "").trim()) return { error: "Para finalizar la atención, completá el diagnóstico." };
   const v = checkVitals(c);
   if (v) return { error: v };
   const appointment_id = str(fd, "appointment_id");
@@ -55,7 +56,8 @@ export async function createConsultation(_: ActionState, fd: FormData): Promise<
   if (appointment_id) await ctx.supabase.from("appointments").update({ status: "en_atencion" }).eq("id", appointment_id).in("status", ["pendiente", "confirmada", "en_espera"]);
   if (fd.get("close") === "1") {
     const { error: e2 } = await ctx.supabase.rpc("close_consultation", { p_id: data.id });
-    if (e2) return { error: "La consulta se guardó pero no se pudo cerrar: " + e2.message };
+    if (e2) return { error: "La consulta se guardó pero no se pudo finalizar: " + e2.message };
+    redirect(`/dashboard?atendido=${data.id}`);
   }
   redirect(`/consultas/${data.id}`);
 }
@@ -64,6 +66,7 @@ export async function updateConsultation(id: string, _: ActionState, fd: FormDat
   const ctx = await getCtx();
   const c = clinical(fd);
   if (!c.reason) return { error: "El motivo de consulta es obligatorio" };
+  if (fd.get("close") === "1" && !String(c.diagnosis ?? "").trim()) return { error: "Para finalizar la atención, completá el diagnóstico." };
   const v = checkVitals(c);
   if (v) return { error: v };
   const { error } = await ctx.supabase.from("consultations").update(c).eq("id", id).eq("status", "abierta");
@@ -71,8 +74,9 @@ export async function updateConsultation(id: string, _: ActionState, fd: FormDat
   if (fd.get("close") === "1") {
     const { error: e2 } = await ctx.supabase.rpc("close_consultation", { p_id: id });
     if (e2) return { error: e2.message };
+    redirect(`/dashboard?atendido=${id}`);
   }
-  return { ok: true, message: fd.get("close") === "1" ? "Consulta cerrada" : "Cambios guardados" };
+  return { ok: true, message: "Cambios guardados" };
 }
 
 export async function amendConsultation(id: string, _: ActionState, fd: FormData): Promise<ActionState> {

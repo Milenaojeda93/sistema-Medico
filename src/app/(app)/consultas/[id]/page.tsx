@@ -7,6 +7,7 @@ import { Badge, Card, DL, Field, Input, LinkButton, Notice, PageHeader, Select, 
 import { ActionForm, Modal, SubmitButton } from "@/components/ui/client";
 import { age, fmtDateTime } from "@/lib/utils";
 import { ClinicalFields } from "../clinical-fields";
+import { FinishBar } from "../finish-bar";
 import { amendConsultation, updateConsultation } from "../actions";
 import { PrescriptionPanel } from "../../recetas/panel";
 import { LabPanel } from "../../laboratorio/panel";
@@ -23,11 +24,14 @@ export default async function ConsultationPage({ params }: { params: Promise<{ i
     .select("*, patients(id, first_name, last_name, document, birth_date, allergies), doctors(full_name, license_number), specialties(name)")
     .eq("id", id).eq("clinic_id", ctx.clinic.id).maybeSingle();
   if (!c) notFound();
-  const [{ data: amendments }, { data: people }, { data: invoice }] = await Promise.all([
+  const [{ data: amendments }, { data: people }, { data: invoice }, { count: rxCount0 }, { count: labCount0 }] = await Promise.all([
     ctx.supabase.from("consultation_amendments").select("*").eq("consultation_id", id).order("created_at"),
     ctx.supabase.from("profiles").select("id, full_name"),
     can(ctx.perms, "facturacion") ? ctx.supabase.from("invoices").select("id, number").eq("consultation_id", id).neq("status", "anulada").maybeSingle() : Promise.resolve({ data: null }),
+    ctx.supabase.from("prescriptions").select("id", { count: "exact", head: true }).eq("consultation_id", id),
+    ctx.supabase.from("lab_orders").select("id", { count: "exact", head: true }).eq("consultation_id", id),
   ]);
+  const rxCount = rxCount0 ?? 0, labCount = labCount0 ?? 0;
   const who = (uid: string | null) => people?.find((p) => p.id === uid)?.full_name ?? "—";
   const p = c.patients as { id: string; first_name: string; last_name: string; document: string; birth_date: string | null; allergies: string | null };
   const d = c.doctors as { full_name: string; license_number: string };
@@ -57,11 +61,12 @@ export default async function ConsultationPage({ params }: { params: Promise<{ i
         <Card>
           <ActionForm action={updateConsultation.bind(null, id)}>
             <ClinicalFields c={c} />
-            <div className="mt-6 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-4">
-              <p className="mr-auto text-xs text-slate-500">Creada por {who(c.created_by)} · última modificación {fmtDateTime(c.updated_at, ctx.tz)}</p>
-              <SubmitButton variant="secondary">Guardar cambios</SubmitButton>
-              <SubmitButton name="close" value="1" confirm="Al cerrar la consulta ya no podrá editarse; las correcciones quedarán como enmiendas. ¿Continuar?">Cerrar consulta</SubmitButton>
-            </div>
+            <p className="mt-6 border-t border-slate-100 pt-4 text-xs text-slate-500">Creada por {who(c.created_by)} · última modificación {fmtDateTime(c.updated_at, ctx.tz)}</p>
+            <FinishBar patient={`${p.first_name} ${p.last_name}`} checks={[
+              { label: "Diagnóstico", done: !!(c.diagnosis ?? "").trim() },
+              { label: rxCount ? `Receta (${rxCount})` : "Receta", done: rxCount > 0 },
+              { label: labCount ? `Estudios (${labCount})` : "Estudios", done: labCount > 0 },
+            ]} />
           </ActionForm>
         </Card>
       ) : null}

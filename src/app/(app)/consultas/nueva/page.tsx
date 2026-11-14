@@ -2,7 +2,8 @@ import { guard } from "@/lib/context";
 import { Card, Notice, PageHeader } from "@/components/ui";
 import { CLINICAL_SUGGESTIONS as CS } from "@/lib/constants";
 import { ConsultaPickers } from "../header-pickers";
-import { ActionForm, SubmitButton } from "@/components/ui/client";
+import { FinishBar } from "../finish-bar";
+import { ActionForm } from "@/components/ui/client";
 import { age } from "@/lib/utils";
 import { ClinicalFields } from "../clinical-fields";
 import { createConsultation } from "../actions";
@@ -52,10 +53,10 @@ export default async function NewConsultation({ searchParams }: { searchParams: 
             />
           </div>
           <ClinicalFields c={{ reason: appt?.reason ?? "" }} />
-          <div className="mt-6 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
-            <SubmitButton variant="secondary">Guardar borrador</SubmitButton>
-            <SubmitButton name="close" value="1" confirm="Al cerrar la consulta ya no podrá editarse; las correcciones quedarán como enmiendas. ¿Continuar?">Guardar y cerrar consulta</SubmitButton>
-          </div>
+          <p className="mt-6 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            ¿Necesitás receta o estudios? Tocá <b>Guardar y seguir</b> y se habilitan abajo. Cuando termines, <b>Finalizar atención</b> deja al paciente como atendido.
+          </p>
+          <FinishBar patient={patient ? `${patient.first_name} ${patient.last_name}` : "Nueva consulta"} draftLabel="Guardar y seguir" />
         </ActionForm>
       </Card>
     </>

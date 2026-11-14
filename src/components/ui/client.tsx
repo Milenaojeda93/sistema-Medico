@@ -36,8 +36,10 @@ export function ActionForm({ action, children, className, resetOnSuccess = false
   const modal = useContext(ModalCtx);
   const router = useRouter();
   const ref = useRef<HTMLFormElement>(null);
+  const errRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
+    if (state?.error) errRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     if (state?.ok) {
       if (resetOnSuccess) ref.current?.reset();
       modal?.close();
@@ -49,7 +51,7 @@ export function ActionForm({ action, children, className, resetOnSuccess = false
   return (
     <form ref={ref} action={formAction} className={className}>
       {children}
-      {state?.error && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-100">{state.error}</p>}
+      {state?.error && <p ref={errRef} className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-100">{state.error}</p>}
       {state?.ok && (state.message || successMessage) && !modal && (
         <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700 ring-1 ring-green-100">{state.message || successMessage}</p>
       )}
