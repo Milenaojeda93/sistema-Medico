@@ -8,6 +8,7 @@ import { BySpecialty, CareType, ConsultationsByDay, IncomeByMonth, NewPatients }
 import { canSee, cardCounts, rangeCharts, type Detail } from "./data";
 import { parseRange, rangeQuery } from "./range";
 import { RangePicker } from "./range-picker";
+import { MyDay } from "./my-day";
 
 export const metadata = { title: "Dashboard" };
 
@@ -46,6 +47,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     <>
       <PageHeader title={`Hola${first ? ", " + first : ""}`} description={own ? "Tu resumen: tus pacientes, tu agenda y tus consultas" : `Resumen de ${ctx.clinic.name}`} />
       {own && !ctx.myDoctorIds.length && <div className="mb-4"><Notice tone="amber">Tu usuario todavía no está vinculado a una ficha de profesional. Pedile al administrador que lo vincule en <b>Médicos y profesionales</b>.</Notice></div>}
+      {ctx.myDoctorIds.length > 0 && <MyDay ctx={ctx} />}
+      {ctx.myDoctorIds.length > 0 && <h2 className="mb-3 text-lg font-semibold text-slate-900">Tu resumen</h2>}
       <RangePicker r={r} base="/dashboard" />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

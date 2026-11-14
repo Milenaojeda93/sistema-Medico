@@ -320,7 +320,7 @@ function AppointmentDetail({ a, tz, canEdit, canConsult, onEdit, onDone }: { a: 
       )}
       <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-4">
         <Link href={`/pacientes/${a.patient_id}`} className={btnClass("secondary", "sm")}><User className="h-4 w-4" /> Ver paciente</Link>
-        {canConsult && ["confirmada", "en_espera", "en_atencion"].includes(a.status) && <Link href={`/consultas/nueva?cita=${a.id}`} className={btnClass("success", "sm")}><Stethoscope className="h-4 w-4" /> Iniciar consulta</Link>}
+        {canConsult && ["pendiente", "confirmada", "en_espera", "en_atencion"].includes(a.status) && <Link href={`/consultas/nueva?cita=${a.id}`} className={btnClass("success", "sm")}><Stethoscope className="h-4 w-4" /> Atender</Link>}
         {canEdit && !["atendida"].includes(a.status) && <button onClick={onEdit} className={cn(btnClass("ghost", "sm"), "ml-auto")}>Editar / reprogramar</button>}
       </div>
     </div>
